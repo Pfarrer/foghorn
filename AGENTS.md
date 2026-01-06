@@ -23,3 +23,11 @@ Implement new check containers by:
 1. Creating a Docker container that outputs JSON results
 2. Adding the check to the schedule configuration
 3. Defining evaluation rules for the output
+
+## Quality Assurance
+
+Test coverage is critical. Before considering any work complete, always verify:
+1. Code compiles without errors
+2. No compiler warnings are generated
+3. All tests pass successfully
+4. All documentation and spec files have been updated

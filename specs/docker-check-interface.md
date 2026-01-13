@@ -30,14 +30,14 @@ Define the interface contract between Foghorn and Docker check containers, inclu
 - Document interface in README or specification file for check authors
 
 ## Acceptance Criteria
-- [ ] Environment variable contract is documented
-- [ ] Expected JSON output format is defined and validated
-- [ ] Example Docker container implements the interface
-- [ ] Foghorn correctly passes configuration via environment variables
-- [ ] Foghorn parses stdout JSON output correctly
-- [ ] Non-zero exit codes are treated as failures
-- [ ] Missing or invalid JSON output is handled gracefully
-- [ ] Interface documentation is clear for external check authors
+- [x] Environment variable contract is documented
+- [x] Expected JSON output format is defined and validated
+- [x] Example Docker container implements the interface
+- [x] Foghorn correctly passes configuration via environment variables
+- [x] Foghorn parses stdout JSON output correctly
+- [x] Non-zero exit codes are treated as failures
+- [x] Missing or invalid JSON output is handled gracefully
+- [x] Interface documentation is clear for external check authors
 
 ## Passes
-false
+true

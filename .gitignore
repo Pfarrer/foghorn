@@ -1,0 +1,21 @@
+# Binaries
+foghorn
+*.test
+*.exe
+
+# Go specific
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/

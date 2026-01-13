@@ -22,10 +22,10 @@ Load and parse check configurations from a YAML file, including check definition
 - Validate schedule format (cron expressions or intervals)
 
 ## Acceptance Criteria
-- [ ] YAML file is parsed without errors
-- [ ] All required fields are validated
-- [ ] Invalid configurations produce helpful error messages
-- [ ] Summary of loaded checks is displayed on successful load
+- [x] YAML file is parsed without errors
+- [x] All required fields are validated
+- [x] Invalid configurations produce helpful error messages
+- [x] Summary of loaded checks is displayed on successful load
 
 ## Passes
-false
+true

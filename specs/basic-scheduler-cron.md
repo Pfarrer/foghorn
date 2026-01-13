@@ -21,11 +21,11 @@ Implement core scheduler component that triggers Docker container checks based o
 - Handle time zones in cron expressions
 
 ## Acceptance Criteria
-- [ ] Scheduler triggers checks based on configured cron schedules
-- [ ] Cron expressions are parsed correctly
-- [ ] Next execution times are calculated accurately
-- [ ] Checks execute at the correct scheduled times
-- [ ] Time zone support is working
+- [x] Scheduler triggers checks based on configured cron schedules
+- [x] Cron expressions are parsed correctly
+- [x] Next execution times are calculated accurately
+- [x] Checks execute at the correct scheduled times
+- [x] Time zone support is working
 
 ## Passes
-false
+true

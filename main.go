@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,13 +14,67 @@ import (
 	"github.com/anomalyco/foghorn/scheduler"
 )
 
+type LogLevel string
+
+const (
+	LogLevelDebug LogLevel = "debug"
+	LogLevelInfo  LogLevel = "info"
+	LogLevelWarn  LogLevel = "warn"
+	LogLevelError LogLevel = "error"
+)
+
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: foghorn <config-file>")
+	var (
+		help       bool
+		configPath string
+		logLevel   string
+		verbose    bool
+	)
+
+	flag.BoolVar(&help, "h", false, "Show help message")
+	flag.BoolVar(&help, "help", false, "Show help message")
+	flag.StringVar(&configPath, "c", "", "Path to configuration file")
+	flag.StringVar(&configPath, "config", "", "Path to configuration file")
+	flag.StringVar(&logLevel, "l", "info", "Log level (debug, info, warn, error)")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
+	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: foghorn [OPTIONS]\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	if help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	if configPath == "" {
+		fmt.Fprintf(os.Stderr, "Error: configuration file path is required\n\n")
+		flag.Usage()
 		os.Exit(1)
 	}
 
-	configPath := os.Args[1]
+	if err := validateLogLevel(LogLevel(logLevel)); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if verbose {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	} else {
+		log.SetFlags(log.Ldate | log.Ltime)
+	}
+
+	if verbose {
+		log.Printf("Loading configuration from: %s", configPath)
+	}
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -58,4 +114,13 @@ func main() {
 
 	sched.Stop()
 	fmt.Println("\nScheduler stopped.")
+}
+
+func validateLogLevel(level LogLevel) error {
+	switch level {
+	case LogLevelDebug, LogLevelInfo, LogLevelWarn, LogLevelError:
+		return nil
+	default:
+		return fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", level)
+	}
 }

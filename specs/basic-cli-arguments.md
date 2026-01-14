@@ -22,13 +22,13 @@ Basic command-line interface application that accepts and parses command-line ar
 - Provide clear error messages for invalid arguments
 
 ## Acceptance Criteria
-- [ ] Application accepts `-h/--help` flag and displays usage information
-- [ ] `-c/--config` flag sets the configuration file path
-- [ ] `-l/--log-level` flag accepts valid log levels (debug, info, warn, error)
-- [ ] `-v/--verbose` flag enables verbose logging
-- [ ] Invalid arguments produce helpful error messages
-- [ ] All flags work in combination
-- [ ] Help text is clear and complete
+- [x] Application accepts `-h/--help` flag and displays usage information
+- [x] `-c/--config` flag sets the configuration file path
+- [x] `-l/--log-level` flag accepts valid log levels (debug, info, warn, error)
+- [x] `-v/--verbose` flag enables verbose logging
+- [x] Invalid arguments produce helpful error messages
+- [x] All flags work in combination
+- [x] Help text is clear and complete
 
 ## Passes
-false
+true

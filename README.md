@@ -17,7 +17,38 @@ Checks are Docker containers that run on a predefined schedule, perform custom a
 Foghorn can be run with a configuration file:
 
 ```bash
-./foghorn example.yaml
+./foghorn -c example.yaml
+```
+
+### Command-Line Options
+
+Foghorn supports the following command-line flags:
+
+- `-c, --config <path>`: Path to the configuration file (required)
+- `-l, --log-level <level>`: Set log level (debug, info, warn, error) (default: info)
+- `-v, --verbose`: Enable verbose logging with timestamps and source file locations
+- `-h, --help`: Display help message and usage information
+
+### Examples
+
+Run with default settings:
+```bash
+./foghorn -c example.yaml
+```
+
+Run with debug logging:
+```bash
+./foghorn -c example.yaml -l debug
+```
+
+Run with verbose output:
+```bash
+./foghorn -c example.yaml -v
+```
+
+Combine flags:
+```bash
+./foghorn --config example.yaml --log-level warn --verbose
 ```
 
 The scheduler will load the configuration and execute checks based on their cron schedules.

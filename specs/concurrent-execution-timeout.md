@@ -23,12 +23,12 @@ Manage concurrent check executions with proper limits and implement timeouts for
 - Log timeout events appropriately
 
 ## Acceptance Criteria
-- [ ] Multiple checks can run concurrently up to configured limit
-- [ ] Checks are queued when concurrency limit is reached
-- [ ] Long-running checks have timeout and are terminated
-- [ ] Check execution is logged when timeout occurs
-- [ ] Timeout is configurable globally and per-check
-- [ ] No resource exhaustion occurs with many concurrent checks
+- [x] Multiple checks can run concurrently up to configured limit
+- [x] Checks are queued when concurrency limit is reached
+- [x] Long-running checks have timeout and are terminated
+- [x] Check execution is logged when timeout occurs
+- [x] Timeout is configurable globally and per-check
+- [x] No resource exhaustion occurs with many concurrent checks
 
 ## Passes
-false
+true

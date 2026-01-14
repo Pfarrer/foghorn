@@ -1,3 +1,7 @@
+version: "1.0"
+max_concurrent_checks: 5
+
+---
 name: "disk-space-check"
 description: "Monitors disk space usage on the server"
 tags:

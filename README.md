@@ -110,11 +110,30 @@ See `examples/docker-check/` for a complete example of a Docker container that i
 Foghorn uses YAML configuration files to define checks. See `example.yaml` for a comprehensive example of all available configuration options.
 
 Configuration includes:
+- Global settings (version, max concurrent checks)
 - Check definitions with container images
 - Schedules (cron expressions or intervals)
 - Evaluation rules for results
 - Metadata and tags
 - Environment variables and timeouts
+
+### Global Settings
+
+- `version`: Configuration file version (optional)
+- `max_concurrent_checks`: Maximum number of checks that can run simultaneously (optional, defaults to unlimited)
+
+### Concurrency Control
+
+Foghorn supports limiting concurrent check execution to prevent resource exhaustion:
+
+```yaml
+max_concurrent_checks: 5
+```
+
+When the concurrency limit is reached:
+- Checks are queued until a slot becomes available
+- No checks are dropped or lost
+- Queue is processed in FIFO order
 
 ## Scheduler
 

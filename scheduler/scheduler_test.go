@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -29,6 +30,17 @@ type MockExecutor struct {
 
 func (m *MockExecutor) Execute(check CheckConfig) error {
 	m.executed = append(m.executed, check.GetName())
+	return nil
+}
+
+type SlowExecutor struct {
+	executed []string
+	blocker  chan struct{}
+}
+
+func (m *SlowExecutor) Execute(check CheckConfig) error {
+	m.executed = append(m.executed, check.GetName())
+	<-m.blocker
 	return nil
 }
 
@@ -160,7 +172,7 @@ func TestCronExpressionNext(t *testing.T) {
 
 func TestSchedulerAddCheck(t *testing.T) {
 	executor := &MockExecutor{}
-	scheduler := NewScheduler(executor, time.UTC)
+	scheduler := NewScheduler(executor, time.UTC, 0)
 
 	check := &MockCheckConfig{
 		name:     "test-check",
@@ -185,7 +197,7 @@ func TestSchedulerAddCheck(t *testing.T) {
 
 func TestSchedulerAddCheckInvalidSchedule(t *testing.T) {
 	executor := &MockExecutor{}
-	scheduler := NewScheduler(executor, time.UTC)
+	scheduler := NewScheduler(executor, time.UTC, 0)
 
 	check := &MockCheckConfig{
 		name:     "test-check",
@@ -201,7 +213,7 @@ func TestSchedulerAddCheckInvalidSchedule(t *testing.T) {
 
 func TestSchedulerRemoveCheck(t *testing.T) {
 	executor := &MockExecutor{}
-	scheduler := NewScheduler(executor, time.UTC)
+	scheduler := NewScheduler(executor, time.UTC, 0)
 
 	check := &MockCheckConfig{
 		name:     "test-check",
@@ -220,7 +232,7 @@ func TestSchedulerRemoveCheck(t *testing.T) {
 
 func TestSchedulerExecution(t *testing.T) {
 	executor := &MockExecutor{}
-	scheduler := NewScheduler(executor, time.UTC)
+	scheduler := NewScheduler(executor, time.UTC, 0)
 
 	check := &MockCheckConfig{
 		name:     "test-check",
@@ -249,7 +261,7 @@ func TestSchedulerExecution(t *testing.T) {
 
 func TestSchedulerDisabledCheck(t *testing.T) {
 	executor := &MockExecutor{}
-	scheduler := NewScheduler(executor, time.UTC)
+	scheduler := NewScheduler(executor, time.UTC, 0)
 
 	check := &MockCheckConfig{
 		name:     "disabled-check",
@@ -333,7 +345,7 @@ func TestTimeZones(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := &MockExecutor{}
-			scheduler := NewScheduler(executor, tt.location)
+			scheduler := NewScheduler(executor, tt.location, 0)
 
 			check := &MockCheckConfig{
 				name:     "test-check",
@@ -347,4 +359,93 @@ func TestTimeZones(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConcurrencyLimit(t *testing.T) {
+	e := &SlowExecutor{
+		executed: []string{},
+		blocker:  make(chan struct{}),
+	}
+
+	scheduler := NewScheduler(e, time.UTC, 2)
+
+	now := time.Now()
+
+	for i := 1; i <= 5; i++ {
+		check := &MockCheckConfig{
+			name:     fmt.Sprintf("check-%d", i),
+			schedule: "* * * * *",
+			enabled:  true,
+		}
+		err := scheduler.AddCheck(check)
+		if err != nil {
+			t.Fatalf("AddCheck() error = %v", err)
+		}
+		checkStatus, _ := scheduler.GetCheckStatus(check.name)
+		checkStatus.NextRun = now
+	}
+
+	scheduler.Start(10 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+
+	allChecks := scheduler.GetAllChecks()
+	runningCount := 0
+	for _, check := range allChecks {
+		if check.Running {
+			runningCount++
+		}
+	}
+
+	if runningCount > 2 {
+		t.Errorf("Expected max 2 running checks, got %d", runningCount)
+	}
+
+	scheduler.Stop()
+	close(e.blocker)
+}
+
+func TestUnlimitedConcurrency(t *testing.T) {
+	e := &SlowExecutor{
+		executed: []string{},
+		blocker:  make(chan struct{}),
+	}
+
+	scheduler := NewScheduler(e, time.UTC, 0)
+
+	now := time.Now()
+
+	for i := 1; i <= 5; i++ {
+		check := &MockCheckConfig{
+			name:     fmt.Sprintf("check-%d", i),
+			schedule: "* * * * *",
+			enabled:  true,
+		}
+		err := scheduler.AddCheck(check)
+		if err != nil {
+			t.Fatalf("AddCheck() error = %v", err)
+		}
+		checkStatus, _ := scheduler.GetCheckStatus(check.name)
+		checkStatus.NextRun = now
+	}
+
+	scheduler.Start(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	allChecks := scheduler.GetAllChecks()
+	runningCount := 0
+	for _, check := range allChecks {
+		if check.Running {
+			runningCount++
+		}
+	}
+
+	if runningCount != 5 {
+		t.Errorf("Expected 5 running checks with unlimited concurrency, got %d", runningCount)
+	}
+
+	for i := 0; i < 5; i++ {
+		e.blocker <- struct{}{}
+	}
+
+	scheduler.Stop()
 }

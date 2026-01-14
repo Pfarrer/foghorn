@@ -27,7 +27,8 @@ type CheckConfig struct {
 }
 
 type Config struct {
-	Checks  []CheckConfig          `yaml:"checks"`
-	Global  map[string]interface{} `yaml:"global,omitempty"`
-	Version string                 `yaml:"version,omitempty"`
+	Checks              []CheckConfig          `yaml:"checks"`
+	Global              map[string]interface{} `yaml:"global,omitempty"`
+	Version             string                 `yaml:"version,omitempty"`
+	MaxConcurrentChecks int                    `yaml:"max_concurrent_checks,omitempty"`
 }

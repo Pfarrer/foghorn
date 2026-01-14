@@ -50,9 +50,18 @@ func PrintSummary(cfg *Config) {
 	}
 	fmt.Printf("Enabled checks: %d\n", enabledCount)
 	fmt.Printf("Disabled checks: %d\n", len(cfg.Checks)-enabledCount)
+	if cfg.MaxConcurrentChecks > 0 {
+		fmt.Printf("Max concurrent checks: %d\n", cfg.MaxConcurrentChecks)
+	} else {
+		fmt.Printf("Max concurrent checks: unlimited\n")
+	}
 }
 
 func validate(cfg *Config) error {
+	if cfg.MaxConcurrentChecks < 0 {
+		return fmt.Errorf("max_concurrent_checks cannot be negative")
+	}
+
 	for i, check := range cfg.Checks {
 		if check.Name == "" {
 			return fmt.Errorf("check %d: name is required", i+1)

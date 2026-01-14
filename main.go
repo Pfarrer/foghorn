@@ -91,7 +91,8 @@ func main() {
 	}
 	defer dockerExecutor.Close()
 
-	sched := scheduler.NewScheduler(dockerExecutor, time.UTC)
+	maxConcurrent := cfg.MaxConcurrentChecks
+	sched := scheduler.NewScheduler(dockerExecutor, time.UTC, maxConcurrent)
 
 	for i := range cfg.Checks {
 		check := &cfg.Checks[i]

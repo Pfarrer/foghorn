@@ -23,22 +23,27 @@ type ScheduledCheck struct {
 }
 
 type Scheduler struct {
-	checks   map[string]*ScheduledCheck
-	executor CheckExecutor
-	ticker   *time.Ticker
-	stopChan chan struct{}
-	location *time.Location
+	checks              map[string]*ScheduledCheck
+	executor            CheckExecutor
+	ticker              *time.Ticker
+	stopChan            chan struct{}
+	location            *time.Location
+	maxConcurrentChecks int
+	runningChecks       int
+	queue               []CheckConfig
 }
 
-func NewScheduler(executor CheckExecutor, location *time.Location) *Scheduler {
+func NewScheduler(executor CheckExecutor, location *time.Location, maxConcurrentChecks int) *Scheduler {
 	if location == nil {
 		location = time.UTC
 	}
 	return &Scheduler{
-		checks:   make(map[string]*ScheduledCheck),
-		executor: executor,
-		stopChan: make(chan struct{}),
-		location: location,
+		checks:              make(map[string]*ScheduledCheck),
+		executor:            executor,
+		stopChan:            make(chan struct{}),
+		location:            location,
+		maxConcurrentChecks: maxConcurrentChecks,
+		queue:               make([]CheckConfig, 0),
 	}
 }
 
@@ -90,6 +95,8 @@ func (s *Scheduler) run() {
 func (s *Scheduler) tick() {
 	now := time.Now().In(s.location)
 
+	s.processQueue()
+
 	for name, check := range s.checks {
 		if !check.Config.IsEnabled() || check.Running {
 			continue
@@ -101,14 +108,36 @@ func (s *Scheduler) tick() {
 	}
 }
 
+func (s *Scheduler) processQueue() {
+	if s.maxConcurrentChecks <= 0 {
+		return
+	}
+
+	for len(s.queue) > 0 && s.runningChecks < s.maxConcurrentChecks {
+		checkConfig := s.queue[0]
+		s.queue = s.queue[1:]
+
+		if check, exists := s.checks[checkConfig.GetName()]; exists {
+			s.executeCheck(checkConfig.GetName(), check)
+		}
+	}
+}
+
 func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
+	if s.maxConcurrentChecks > 0 && s.runningChecks >= s.maxConcurrentChecks {
+		s.queue = append(s.queue, check.Config)
+		return
+	}
+
 	check.Running = true
+	s.runningChecks++
 	now := time.Now().In(s.location)
 	check.LastRun = &now
 
 	go func() {
 		defer func() {
 			check.Running = false
+			s.runningChecks--
 			nextRun, err := s.calculateNextRun(check.Config.GetSchedule())
 			if err == nil {
 				check.NextRun = nextRun

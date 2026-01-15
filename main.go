@@ -29,6 +29,7 @@ func main() {
 		configPath string
 		logLevel   string
 		verbose    bool
+		dryRun     bool
 	)
 
 	flag.BoolVar(&help, "h", false, "Show help message")
@@ -39,6 +40,8 @@ func main() {
 	flag.StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
+	flag.BoolVar(&dryRun, "d", false, "Validate configuration only")
+	flag.BoolVar(&dryRun, "dry-run", false, "Validate configuration only")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
@@ -83,6 +86,11 @@ func main() {
 	}
 
 	config.PrintSummary(cfg)
+
+	if dryRun {
+		fmt.Println("Configuration validation successful.")
+		os.Exit(0)
+	}
 
 	dockerExecutor, err := executor.NewDockerExecutor()
 	if err != nil {

@@ -9,9 +9,7 @@ Basic command-line interface application that accepts and parses command-line ar
 ## Usage Steps
 1. Run Foghorn with the `-h` or `--help` flag to see available options
 2. Provide configuration file path with `-c` or `--config` flag
-3. Set log level with `-l` or `--log-level` flag
-4. Enable verbose output with `-v` or `--verbose` flag
-5. Specify custom config directory with `-d` or `--config-dir` flag
+3. Enable verbose output with `-v` or `--verbose` flag
 
 ## Implementation Notes
 - Use a CLI argument parsing library (e.g., cobra, flag, or similar)
@@ -24,7 +22,7 @@ Basic command-line interface application that accepts and parses command-line ar
 ## Acceptance Criteria
 - [x] Application accepts `-h/--help` flag and displays usage information
 - [x] `-c/--config` flag sets the configuration file path
-- [x] `-l/--log-level` flag accepts valid log levels (debug, info, warn, error)
+- [x] `-d/--dry-run` flag validates the configuration only
 - [x] `-v/--verbose` flag enables verbose logging
 - [x] Invalid arguments produce helpful error messages
 - [x] All flags work in combination

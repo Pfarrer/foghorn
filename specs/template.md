@@ -25,6 +25,3 @@ Technical details and requirements for implementing the feature
 - [ ] Criterion one
 - [ ] Criterion two
 - [ ] Criterion three
-
-## Passes
-false

@@ -26,6 +26,3 @@ Implement core scheduler component that triggers Docker container checks based o
 - [x] Next execution times are calculated accurately
 - [x] Checks execute at the correct scheduled times
 - [x] Time zone support is working
-
-## Passes
-true

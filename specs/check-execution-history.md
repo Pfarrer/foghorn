@@ -29,6 +29,3 @@ Persist check execution history for monitoring and debugging purposes
 - [ ] History retention policy is enforced
 - [ ] History can be queried by check name and time range
 - [ ] Execution data is persisted across service restarts
-
-## Passes
-false

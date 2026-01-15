@@ -25,6 +25,3 @@ Add support for interval-based scheduling (e.g., "every 5 minutes") as an altern
 - [ ] Next execution times are calculated accurately
 - [ ] Mixed cron and interval schedules work together
 - [ ] Invalid interval syntax produces helpful error messages
-
-## Passes
-false

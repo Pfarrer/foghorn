@@ -29,6 +29,3 @@ Manage concurrent check executions with proper limits and implement timeouts for
 - [x] Check execution is logged when timeout occurs
 - [x] Timeout is configurable globally and per-check
 - [x] No resource exhaustion occurs with many concurrent checks
-
-## Passes
-true

@@ -29,6 +29,3 @@ Basic command-line interface application that accepts and parses command-line ar
 - [x] Invalid arguments produce helpful error messages
 - [x] All flags work in combination
 - [x] Help text is clear and complete
-
-## Passes
-true

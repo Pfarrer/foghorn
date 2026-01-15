@@ -26,7 +26,4 @@ Define the YAML configuration format for Foghorn check definitions and create an
 - [ ] All possible fields are demonstrated in the example
 - [ ] YAML is valid and can be parsed without errors
 - [ ] Example has clear inline comments explaining each field
-- [ ] Schedule formats (cron and interval) are demonstrated
-
-## Passes
-true
+- [x] Schedule formats (cron and interval) are demonstrated

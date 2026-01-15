@@ -104,13 +104,15 @@ func main() {
 
 	for i := range cfg.Checks {
 		check := &cfg.Checks[i]
-		if check.Schedule.Cron != "" {
-			adapter := scheduler.NewConfigAdapter(check)
-			if err := sched.AddCheck(adapter); err != nil {
-				fmt.Fprintf(os.Stderr, "Error adding check %s: %v\n", check.Name, err)
-			} else {
-				fmt.Printf("Scheduled check: %s (%s)\n", check.Name, check.Schedule.Cron)
+		adapter := scheduler.NewConfigAdapter(check)
+		if err := sched.AddCheck(adapter); err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding check %s: %v\n", check.Name, err)
+		} else {
+			scheduleType := check.Schedule.Cron
+			if check.Schedule.Interval != "" {
+				scheduleType = fmt.Sprintf("interval %s", check.Schedule.Interval)
 			}
+			fmt.Printf("Scheduled check: %s (%s)\n", check.Name, scheduleType)
 		}
 	}
 

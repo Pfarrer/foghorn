@@ -24,6 +24,33 @@ func (m *MockCheckConfig) IsEnabled() bool {
 	return m.enabled
 }
 
+type IntervalMockCheckConfig struct {
+	name     string
+	schedule string
+	enabled  bool
+	interval string
+}
+
+func (m *IntervalMockCheckConfig) GetName() string {
+	return m.name
+}
+
+func (m *IntervalMockCheckConfig) GetSchedule() string {
+	return m.interval
+}
+
+func (m *IntervalMockCheckConfig) IsEnabled() bool {
+	return m.enabled
+}
+
+func (m *IntervalMockCheckConfig) GetScheduleType() ScheduleType {
+	return ScheduleTypeInterval
+}
+
+func (m *IntervalMockCheckConfig) GetInterval() string {
+	return m.interval
+}
+
 type MockExecutor struct {
 	executed []string
 }
@@ -448,4 +475,154 @@ func TestUnlimitedConcurrency(t *testing.T) {
 	}
 
 	scheduler.Stop()
+}
+
+func TestParseInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval string
+		wantErr  bool
+		wantDur  time.Duration
+	}{
+		{
+			name:     "seconds",
+			interval: "30s",
+			wantErr:  false,
+			wantDur:  30 * time.Second,
+		},
+		{
+			name:     "minutes",
+			interval: "5m",
+			wantErr:  false,
+			wantDur:  5 * time.Minute,
+		},
+		{
+			name:     "hours",
+			interval: "2h",
+			wantErr:  false,
+			wantDur:  2 * time.Hour,
+		},
+		{
+			name:     "days",
+			interval: "1d",
+			wantErr:  false,
+			wantDur:  24 * time.Hour,
+		},
+		{
+			name:     "empty interval",
+			interval: "",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid unit",
+			interval: "5x",
+			wantErr:  true,
+		},
+		{
+			name:     "missing unit",
+			interval: "5",
+			wantErr:  true,
+		},
+		{
+			name:     "negative value",
+			interval: "-5m",
+			wantErr:  true,
+		},
+		{
+			name:     "zero value",
+			interval: "0s",
+			wantErr:  true,
+		},
+		{
+			name:     "non-numeric value",
+			interval: "abc",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseInterval(tt.interval)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseInterval() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.wantDur {
+				t.Errorf("parseInterval() = %v, want %v", got, tt.wantDur)
+			}
+		})
+	}
+}
+
+func TestIntervalBasedScheduling(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	check := &IntervalMockCheckConfig{
+		name:     "interval-check",
+		schedule: "30s",
+		enabled:  true,
+		interval: "30s",
+	}
+
+	err := scheduler.AddCheck(check)
+	if err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	checkStatus, exists := scheduler.GetCheckStatus("interval-check")
+	if !exists {
+		t.Fatal("Check should exist")
+	}
+
+	if checkStatus.ScheduleType != ScheduleTypeInterval {
+		t.Errorf("Expected schedule type interval, got %v", checkStatus.ScheduleType)
+	}
+
+	if checkStatus.Interval != 30*time.Second {
+		t.Errorf("Expected interval 30s, got %v", checkStatus.Interval)
+	}
+
+	now := time.Now().In(time.UTC)
+	if checkStatus.NextRun.Before(now) || checkStatus.NextRun.After(now.Add(31*time.Second)) {
+		t.Errorf("Next run time should be approximately 30 seconds from now, got %v", checkStatus.NextRun)
+	}
+}
+
+func TestMixedCronAndIntervalScheduling(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	cronCheck := &MockCheckConfig{
+		name:     "cron-check",
+		schedule: "* * * * *",
+		enabled:  true,
+	}
+
+	intervalCheck := &IntervalMockCheckConfig{
+		name:     "interval-check",
+		schedule: "1m",
+		enabled:  true,
+		interval: "1m",
+	}
+
+	err := scheduler.AddCheck(cronCheck)
+	if err != nil {
+		t.Fatalf("AddCheck() for cron check error = %v", err)
+	}
+
+	err = scheduler.AddCheck(intervalCheck)
+	if err != nil {
+		t.Fatalf("AddCheck() for interval check error = %v", err)
+	}
+
+	cronStatus, _ := scheduler.GetCheckStatus("cron-check")
+	if cronStatus.ScheduleType != ScheduleTypeCron {
+		t.Errorf("Expected cron check to have schedule type cron, got %v", cronStatus.ScheduleType)
+	}
+
+	intervalStatus, _ := scheduler.GetCheckStatus("interval-check")
+	if intervalStatus.ScheduleType != ScheduleTypeInterval {
+		t.Errorf("Expected interval check to have schedule type interval, got %v", intervalStatus.ScheduleType)
+	}
 }

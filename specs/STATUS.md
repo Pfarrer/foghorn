@@ -8,13 +8,13 @@ These specs have been implemented and all acceptance criteria pass.
 - [Concurrent Execution and Timeout Handling](concurrent-execution-timeout.md)
 - [Define Config YAML Format and Create Example](define-config-yaml-format.md)
 - [Docker Check Interface Contract](docker-check-interface.md)
+- [Interval-Based Scheduling](interval-based-scheduling.md)
 - [Load Check Config from YAML File](load-config-yaml.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
 - [Check Execution History Tracking](check-execution-history.md)
-- [Interval-Based Scheduling](interval-based-scheduling.md)
 
 ## Blocked
 No specs are currently blocked.

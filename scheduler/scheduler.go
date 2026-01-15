@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -11,15 +13,23 @@ type CheckConfig interface {
 	IsEnabled() bool
 }
 
+type IntervalCheckConfig interface {
+	CheckConfig
+	GetScheduleType() ScheduleType
+	GetInterval() string
+}
+
 type CheckExecutor interface {
 	Execute(check CheckConfig) error
 }
 
 type ScheduledCheck struct {
-	Config  CheckConfig
-	NextRun time.Time
-	LastRun *time.Time
-	Running bool
+	Config       CheckConfig
+	NextRun      time.Time
+	LastRun      *time.Time
+	Running      bool
+	ScheduleType ScheduleType
+	Interval     time.Duration
 }
 
 type Scheduler struct {
@@ -52,14 +62,31 @@ func (s *Scheduler) AddCheck(config CheckConfig) error {
 		return fmt.Errorf("check %s: schedule is required", config.GetName())
 	}
 
-	nextRun, err := s.calculateNextRun(config.GetSchedule())
-	if err != nil {
-		return fmt.Errorf("check %s: failed to calculate next run: %w", config.GetName(), err)
+	var nextRun time.Time
+	var scheduleType ScheduleType
+	var interval time.Duration
+	var err error
+
+	if intervalCheck, ok := config.(IntervalCheckConfig); ok && intervalCheck.GetScheduleType() == ScheduleTypeInterval {
+		scheduleType = ScheduleTypeInterval
+		interval, err = parseInterval(intervalCheck.GetInterval())
+		if err != nil {
+			return fmt.Errorf("check %s: failed to parse interval: %w", config.GetName(), err)
+		}
+		nextRun = time.Now().In(s.location).Add(interval)
+	} else {
+		scheduleType = ScheduleTypeCron
+		nextRun, err = s.calculateNextRun(config.GetSchedule())
+		if err != nil {
+			return fmt.Errorf("check %s: failed to calculate next run: %w", config.GetName(), err)
+		}
 	}
 
 	s.checks[config.GetName()] = &ScheduledCheck{
-		Config:  config,
-		NextRun: nextRun,
+		Config:       config,
+		NextRun:      nextRun,
+		ScheduleType: scheduleType,
+		Interval:     interval,
 	}
 
 	return nil
@@ -138,10 +165,16 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 		defer func() {
 			check.Running = false
 			s.runningChecks--
-			nextRun, err := s.calculateNextRun(check.Config.GetSchedule())
-			if err == nil {
-				check.NextRun = nextRun
+			now := time.Now().In(s.location)
+			if check.ScheduleType == ScheduleTypeInterval && check.Interval > 0 {
+				check.NextRun = now.Add(check.Interval)
+			} else {
+				nextRun, err := s.calculateNextRun(check.Config.GetSchedule())
+				if err == nil {
+					check.NextRun = nextRun
+				}
 			}
+			check.LastRun = &now
 		}()
 
 		if err := s.executor.Execute(check.Config); err != nil {
@@ -158,6 +191,38 @@ func (s *Scheduler) calculateNextRun(cronExpr string) (time.Time, error) {
 
 	now := time.Now().In(s.location)
 	return parsed.Next(now), nil
+}
+
+func parseInterval(interval string) (time.Duration, error) {
+	interval = strings.TrimSpace(interval)
+	if interval == "" {
+		return 0, fmt.Errorf("interval cannot be empty")
+	}
+
+	unit := interval[len(interval)-1:]
+	valueStr := interval[:len(interval)-1]
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid interval value: %s", valueStr)
+	}
+
+	if value <= 0 {
+		return 0, fmt.Errorf("interval value must be positive: %d", value)
+	}
+
+	switch unit {
+	case "s":
+		return time.Duration(value) * time.Second, nil
+	case "m":
+		return time.Duration(value) * time.Minute, nil
+	case "h":
+		return time.Duration(value) * time.Hour, nil
+	case "d":
+		return time.Duration(value) * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("invalid interval unit: %s (must be s, m, h, or d)", unit)
+	}
 }
 
 func (s *Scheduler) GetCheckStatus(name string) (*ScheduledCheck, bool) {

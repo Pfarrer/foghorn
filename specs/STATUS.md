@@ -13,6 +13,7 @@ These specs have been implemented and all acceptance criteria pass.
 - [Load Check Config from YAML File](load-config-yaml.md)
 - [Verify Image Availability Flag](verify-image-availability-flag.md)
 - [Standard Disk Space Check](standard-disk-space-check.md)
+- [Docker Image Build and Publish](docker-image-build-publish.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.

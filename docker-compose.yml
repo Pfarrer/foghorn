@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  foghorn:
+    image: ghcr.io/anomalyco/foghorn:latest
+    container_name: foghorn
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config.yml:/app/config.yml:ro
+    environment:
+      - TZ=UTC

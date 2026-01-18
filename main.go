@@ -1,17 +1,20 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/anomalyco/foghorn/config"
 	"github.com/anomalyco/foghorn/executor"
 	"github.com/anomalyco/foghorn/scheduler"
+	"github.com/docker/docker/client"
 )
 
 type LogLevel string
@@ -25,11 +28,12 @@ const (
 
 func main() {
 	var (
-		help       bool
-		configPath string
-		logLevel   string
-		verbose    bool
-		dryRun     bool
+		help                    bool
+		configPath              string
+		logLevel                string
+		verbose                 bool
+		dryRun                  bool
+		verifyImageAvailability bool
 	)
 
 	flag.BoolVar(&help, "h", false, "Show help message")
@@ -42,12 +46,25 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	flag.BoolVar(&dryRun, "d", false, "Validate configuration only")
 	flag.BoolVar(&dryRun, "dry-run", false, "Validate configuration only")
+	flag.BoolVar(&verifyImageAvailability, "i", false, "Verify all Docker images in config are available locally")
+	flag.BoolVar(&verifyImageAvailability, "verify-image-availability", false, "Verify all Docker images in config are available locally")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: foghorn [OPTIONS]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "  -c, --config <path>\n")
+		fmt.Fprintf(os.Stderr, "      Path to configuration file\n")
+		fmt.Fprintf(os.Stderr, "  -l, --log-level <level>\n")
+		fmt.Fprintf(os.Stderr, "      Log level (debug, info, warn, error) (default: info)\n")
+		fmt.Fprintf(os.Stderr, "  -v, --verbose\n")
+		fmt.Fprintf(os.Stderr, "      Enable verbose logging\n")
+		fmt.Fprintf(os.Stderr, "  -d, --dry-run\n")
+		fmt.Fprintf(os.Stderr, "      Validate configuration only\n")
+		fmt.Fprintf(os.Stderr, "  -i, --verify-image-availability\n")
+		fmt.Fprintf(os.Stderr, "      Verify all Docker images in config are available locally\n")
+		fmt.Fprintf(os.Stderr, "  -h, --help\n")
+		fmt.Fprintf(os.Stderr, "      Show help message\n")
 	}
 
 	flag.Parse()
@@ -86,6 +103,14 @@ func main() {
 	}
 
 	config.PrintSummary(cfg)
+
+	if verifyImageAvailability {
+		fmt.Println("Validating Docker images...")
+		if err := verifyImageAvailabilityFn(cfg, verbose); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	if dryRun {
 		fmt.Println("Configuration validation successful.")
@@ -134,4 +159,72 @@ func validateLogLevel(level LogLevel) error {
 	default:
 		return fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", level)
 	}
+}
+
+func verifyImageAvailabilityFn(cfg *config.Config, verbose bool) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to connect to Docker daemon: %w", err)
+	}
+	defer cli.Close()
+
+	imageChecks := make(map[string][]string)
+	enabledChecks := 0
+
+	for _, check := range cfg.Checks {
+		if check.Enabled {
+			enabledChecks++
+			if check.Image != "" {
+				imageChecks[check.Image] = append(imageChecks[check.Image], check.Name)
+			}
+		}
+	}
+
+	if verbose {
+		log.Printf("Checking %d unique images across %d enabled checks", len(imageChecks), enabledChecks)
+	}
+
+	missingImages := make(map[string][]string)
+
+	for image, checkNames := range imageChecks {
+		_, _, err := cli.ImageInspectWithRaw(context.Background(), image)
+		if err != nil {
+			if client.IsErrNotFound(err) {
+				missingImages[image] = checkNames
+				if verbose {
+					log.Printf("Image not found locally: %s", image)
+				}
+			} else {
+				return fmt.Errorf("error checking image %s: %w", image, err)
+			}
+		} else {
+			if verbose {
+				log.Printf("Image found locally: %s", image)
+			}
+		}
+	}
+
+	if len(missingImages) > 0 {
+		var builder strings.Builder
+		builder.WriteString("Error: The following Docker images are not available locally:\n\n")
+		for image, checkNames := range missingImages {
+			fmt.Fprintf(&builder, "- %s (required by: %s)\n", image, strings.Join(checkNames, ", "))
+		}
+		builder.WriteString("\nPlease pull the missing images:\n")
+		for image := range missingImages {
+			fmt.Fprintf(&builder, "  docker pull %s\n", image)
+		}
+		return fmt.Errorf("%s", builder.String())
+	}
+
+	fmt.Println("\nAll Docker images validated successfully:")
+	for image, checkNames := range imageChecks {
+		fmt.Printf("  - %s ✓", image)
+		if verbose && len(checkNames) > 1 {
+			fmt.Printf(" (used by: %s)", strings.Join(checkNames, ", "))
+		}
+		fmt.Println()
+	}
+
+	return nil
 }

@@ -27,6 +27,8 @@ Foghorn supports the following command-line flags:
 - `-c, --config <path>`: Path to the configuration file (required)
 - `-l, --log-level <level>`: Set log level (debug, info, warn, error) (default: info)
 - `-v, --verbose`: Enable verbose logging with timestamps and source file locations
+- `-d, --dry-run`: Validate configuration only without running the scheduler
+- `-i, --verify-image-availability`: Verify all Docker images in config are available locally
 - `-h, --help`: Display help message and usage information
 
 ### Examples
@@ -46,9 +48,19 @@ Run with verbose output:
 ./foghorn -c example.yaml -v
 ```
 
-Combine flags:
+Validate configuration only:
 ```bash
-./foghorn --config example.yaml --log-level warn --verbose
+./foghorn -c example.yaml --dry-run
+```
+
+Verify Docker images are available locally:
+```bash
+./foghorn -c example.yaml --verify-image-availability
+```
+
+Combine flags for full validation:
+```bash
+./foghorn -c example.yaml --dry-run --verify-image-availability
 ```
 
 The scheduler will load the configuration and execute checks based on their cron schedules.

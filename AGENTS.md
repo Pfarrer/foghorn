@@ -31,3 +31,14 @@ Test coverage is critical. Before considering any work complete, always verify:
 2. No compiler warnings are generated
 3. All tests pass successfully
 4. All documentation and spec files have been updated
+
+## Spec Status Tracking
+
+Spec implementation status is tracked in [specs/STATUS.md](specs/STATUS.md). When implementing a spec:
+1. Move the spec from "Ready" to "Done" upon completion
+2. Set the `Passes` field to `true` in the spec file
+3. Update any relevant documentation
+
+## Documentation Style
+
+All documentation and markdown files must be concise and short. Minimize the amount of text wherever possible. Be direct and avoid unnecessary elaboration.

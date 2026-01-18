@@ -16,7 +16,7 @@ Add a CLI flag that validates all Docker images referenced in the configuration 
 
 ## Implementation Notes
 Add new CLI flag:
-- `--verify-image-availability, -i`: Verify all Docker images in config are available locally
+- `--verify-image-availability`: Verify all Docker images in config are available locally
 
 Flag behavior:
 - Can be used alone or combined with `--dry-run`

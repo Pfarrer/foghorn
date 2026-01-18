@@ -10,11 +10,18 @@ These specs have been implemented and all acceptance criteria pass.
 - [Docker Check Interface Contract](docker-check-interface.md)
 - [Interval-Based Scheduling](interval-based-scheduling.md)
 - [Load Check Config from YAML File](load-config-yaml.md)
+- [Verify Image Availability Flag](verify-image-availability-flag.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
 - [Check Execution History Tracking](check-execution-history.md)
+- [Standard DNS Check](standard-dns-check.md)
+- [Standard Port Check](standard-port-check.md)
+- [Standard System Load Check](standard-system-load-check.md)
+- [Standard Disk Space Check](standard-disk-space-check.md)
+- [Standard HTTP Check](standard-http-check.md)
+- [Standard Ping Check](standard-ping-check.md)
 
 ## Blocked
 No specs are currently blocked.

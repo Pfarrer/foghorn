@@ -8,6 +8,7 @@ These specs have been implemented and all acceptance criteria pass.
 - [Concurrent Execution and Timeout Handling](concurrent-execution-timeout.md)
 - [Define Config YAML Format and Create Example](define-config-yaml-format.md)
 - [Docker Check Interface Contract](docker-check-interface.md)
+- [GitHub Actions Release Workflow](github-actions-release.md)
 - [Interval-Based Scheduling](interval-based-scheduling.md)
 - [Load Check Config from YAML File](load-config-yaml.md)
 - [Verify Image Availability Flag](verify-image-availability-flag.md)

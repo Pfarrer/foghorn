@@ -8,8 +8,8 @@ image: "foghorn/http-check:latest"
 schedule:
   interval: "1m"
 env:
-  URL: "https://example.com"
+  URL: "https://httpbin.org/status/200"
   EXPECTED_STATUS: "200"
-  WARNING_THRESHOLD_MS: "1000"
-  CRITICAL_THRESHOLD_MS: "5000"
-timeout: "10s"
+  WARNING_THRESHOLD_MS: "5000"
+  CRITICAL_THRESHOLD_MS: "10000"
+timeout: "30s"

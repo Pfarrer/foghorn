@@ -1,0 +1,9 @@
+name: "website-check"
+image: "foghorn/http-check:latest"
+schedule:
+  cron: "*/10 * * * *"
+env:
+  URL: "https://example.com"
+  CONTENT_REGEX: ".*Welcome.*"
+  HEADERS: '{"User-Agent":"Foghorn/1.0"}'
+timeout: "15s"

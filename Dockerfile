@@ -6,6 +6,7 @@ WORKDIR /app
 
 ARG BINARY=foghorn
 COPY --chown=65532:65532 ${BINARY} ./foghorn
+RUN chmod +x ./foghorn
 
 USER 65532:65532
 

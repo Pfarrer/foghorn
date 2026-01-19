@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anomalyco/foghorn/config"
+	"github.com/pfarrer/foghorn/config"
 )
 
 func TestCheckResultJSON(t *testing.T) {

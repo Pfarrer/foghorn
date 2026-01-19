@@ -20,7 +20,7 @@ Extend the GitHub Actions workflow to build and publish a multi-architecture Doc
 - Use Docker Buildx for multi-platform builds
 - Configure platforms: linux/amd64, linux/arm64, linux/arm/v7
 - Authenticate with GitHub Container Registry using GITHUB_TOKEN
-- Push images to ghcr.io/anomalyco/foghorn
+- Push images to ghcr.io/pfarrer/foghorn
 - Tag images with Git SHA and 'latest' tag
 - Use docker/metadata-action to generate tags and labels
 - Set proper Dockerfile context and build args
@@ -35,7 +35,7 @@ Extend the GitHub Actions workflow to build and publish a multi-architecture Doc
 - [x] Image is pushed to GitHub Container Registry
 - [x] Image is tagged with Git commit SHA
 - [x] Image is tagged with 'latest' tag
-- [x] Image is accessible via docker pull ghcr.io/anomalyco/foghorn:latest
+- [x] Image is accessible via docker pull ghcr.io/pfarrer/foghorn:latest
 - [x] Build logs show multi-platform build progress
 - [x] Workflow fails if Docker build or push fails
 - [x] Example docker-compose.yml is provided demonstrating general usage

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   foghorn:
-    image: ghcr.io/anomalyco/foghorn:latest
+    image: ghcr.io/pfarrer/foghorn:latest
     container_name: foghorn
     restart: unless-stopped
     volumes:

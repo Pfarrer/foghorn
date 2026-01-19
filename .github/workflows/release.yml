@@ -111,7 +111,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ghcr.io/anomalyco/foghorn:${{ matrix.target_os }}-${{ matrix.target_arch }}-${{ github.sha }}
+          tags: ghcr.io/pfarrer/foghorn:${{ matrix.target_os }}-${{ matrix.target_arch }}-${{ github.sha }}
           build-args: |
             BINARY=${{ matrix.binary_name }}
 
@@ -136,8 +136,8 @@ jobs:
       - name: Create and push manifest
         run: |
           docker buildx imagetools create \
-            --tag ghcr.io/anomalyco/foghorn:${{ github.sha }} \
-            --tag ghcr.io/anomalyco/foghorn:latest \
-            ghcr.io/anomalyco/foghorn:linux-amd64-${{ github.sha }} \
-            ghcr.io/anomalyco/foghorn:linux-arm64-${{ github.sha }} \
-            ghcr.io/anomalyco/foghorn:linux-arm-${{ github.sha }}
+            --tag ghcr.io/pfarrer/foghorn:${{ github.sha }} \
+            --tag ghcr.io/pfarrer/foghorn:latest \
+            ghcr.io/pfarrer/foghorn:linux-amd64-${{ github.sha }} \
+            ghcr.io/pfarrer/foghorn:linux-arm64-${{ github.sha }} \
+            ghcr.io/pfarrer/foghorn:linux-arm-${{ github.sha }}

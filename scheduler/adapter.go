@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"github.com/anomalyco/foghorn/config"
+	"github.com/pfarrer/foghorn/config"
 )
 
 type ScheduleType string

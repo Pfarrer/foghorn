@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/anomalyco/foghorn/config"
 	"github.com/docker/docker/client"
+	"github.com/pfarrer/foghorn/config"
 )
 
 func TestVerifyImageAvailability_NoChecks(t *testing.T) {

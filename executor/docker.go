@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anomalyco/foghorn/config"
-	"github.com/anomalyco/foghorn/scheduler"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/pfarrer/foghorn/config"
+	"github.com/pfarrer/foghorn/scheduler"
 )
 
 type CheckResult struct {

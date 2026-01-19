@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anomalyco/foghorn/config"
-	"github.com/anomalyco/foghorn/executor"
-	"github.com/anomalyco/foghorn/scheduler"
 	"github.com/docker/docker/client"
+	"github.com/pfarrer/foghorn/config"
+	"github.com/pfarrer/foghorn/executor"
+	"github.com/pfarrer/foghorn/scheduler"
 )
 
 type LogLevel string

@@ -1,4 +1,4 @@
-module github.com/anomalyco/foghorn
+module github.com/pfarrer/foghorn
 
 go 1.24.0
 

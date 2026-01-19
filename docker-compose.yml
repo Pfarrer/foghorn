@@ -9,3 +9,8 @@ services:
     environment:
       - TZ=UTC
     command: ["-c", "/app/config.yml"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

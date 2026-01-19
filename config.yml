@@ -1,0 +1,15 @@
+version: "1.0"
+
+---
+name: "http-health-check"
+description: "Checks health of example.com website"
+enabled: true
+image: "foghorn/http-check:latest"
+schedule:
+  interval: "1m"
+env:
+  URL: "https://example.com"
+  EXPECTED_STATUS: "200"
+  WARNING_THRESHOLD_MS: "1000"
+  CRITICAL_THRESHOLD_MS: "5000"
+timeout: "10s"

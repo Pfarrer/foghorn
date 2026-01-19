@@ -5,7 +5,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 
 ARG BINARY=foghorn
-COPY ${BINARY} .
+COPY ${BINARY} ./foghorn
 
 USER 65532:65532
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   foghorn:
     image: ghcr.io/pfarrer/foghorn:latest
@@ -10,3 +8,4 @@ services:
       - ./config.yml:/app/config.yml:ro
     environment:
       - TZ=UTC
+    command: ["-c", "/app/config.yml"]

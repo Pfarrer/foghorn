@@ -101,7 +101,12 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		return fmt.Errorf("check execution timed out after %v", timeout)
 	}
 
-	status := <-statusCh
+	var status container.WaitResponse
+	select {
+	case status = <-statusCh:
+	case <-ctx.Done():
+		return fmt.Errorf("check execution timed out after %v", timeout)
+	}
 	duration := time.Since(startTime)
 
 	if status.StatusCode != 0 {

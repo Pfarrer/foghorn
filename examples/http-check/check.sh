@@ -4,6 +4,11 @@ set -e
 
 START_TIME=$(date +%s%3N)
 
+# Enable debug mode
+if [ "${DEBUG:-}" = "true" ]; then
+    set -x
+fi
+
 # Configuration
 URL="${URL}"
 EXPECTED_STATUS="${EXPECTED_STATUS:-200}"

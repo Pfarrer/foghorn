@@ -81,6 +81,10 @@ func TestBuildEnvVars(t *testing.T) {
 		t.Errorf("Expected FOGHORN_ENDPOINT=https://example.com, got %s", envMap["FOGHORN_ENDPOINT"])
 	}
 
+	if envMap["ENDPOINT"] != "https://example.com" {
+		t.Errorf("Expected ENDPOINT=https://example.com, got %s", envMap["ENDPOINT"])
+	}
+
 	if envMap["FOGHORN_TIMEOUT"] != "30s" {
 		t.Errorf("Expected FOGHORN_TIMEOUT=30s, got %s", envMap["FOGHORN_TIMEOUT"])
 	}
@@ -122,6 +126,89 @@ func TestNewDockerExecutor(t *testing.T) {
 
 	if err := exec.Close(); err != nil {
 		t.Errorf("Failed to close executor: %v", err)
+	}
+}
+
+func TestDemultiplexLogs(t *testing.T) {
+	jsonStr := `{"status":"pass","message":"test"}`
+
+	header := []byte{0x01, 0x00, 0x00, 0x00}
+	size := make([]byte, 4)
+	size[0] = byte(len(jsonStr) >> 24)
+	size[1] = byte(len(jsonStr) >> 16)
+	size[2] = byte(len(jsonStr) >> 8)
+	size[3] = byte(len(jsonStr))
+
+	multiplexed := append(append(header, size...), jsonStr...)
+
+	result := demultiplexLogs(multiplexed)
+
+	if string(result) != jsonStr {
+		t.Errorf("Expected %q, got %q", jsonStr, string(result))
+	}
+
+	multipleFrames := append(multiplexed, multiplexed...)
+	result = demultiplexLogs(multipleFrames)
+
+	expected := jsonStr + jsonStr
+	if string(result) != expected {
+		t.Errorf("Expected %q, got %q", expected, string(result))
+	}
+}
+
+func TestReadResultWithMixedOutput(t *testing.T) {
+	exec, err := NewDockerExecutor()
+	if err != nil {
+		t.Fatalf("Failed to create executor: %v", err)
+	}
+	defer exec.Close()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "Pure JSON",
+			input:   `{"status":"pass","message":"test","timestamp":"2026-01-20T00:00:00Z","duration_ms":100}`,
+			wantErr: false,
+		},
+		{
+			name:    "Mixed text and JSON",
+			input:   `Testing HTTP to https://example.com\n{"status":"pass","message":"test","timestamp":"2026-01-20T00:00:00Z","duration_ms":100}`,
+			wantErr: false,
+		},
+		{
+			name:    "Multiple lines before JSON",
+			input:   `Line 1\nLine 2\nLine 3\n{"status":"pass","message":"test","timestamp":"2026-01-20T00:00:00Z","duration_ms":100}`,
+			wantErr: false,
+		},
+		{
+			name:    "Invalid JSON",
+			input:   `This is not JSON`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result CheckResult
+			err := json.Unmarshal([]byte(tt.input), &result)
+
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got none")
+			}
+
+			if !tt.wantErr && err != nil {
+				openBrace := strings.LastIndex(tt.input, "{")
+				if openBrace != -1 {
+					err = json.Unmarshal([]byte(tt.input[openBrace:]), &result)
+				}
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
 

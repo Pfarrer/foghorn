@@ -73,17 +73,14 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	}
 
 	hostConfig := &container.HostConfig{
-		AutoRemove: true,
+		AutoRemove: false,
 	}
 
 	resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
 		return fmt.Errorf("failed to create container: %w", err)
 	}
-
 	defer e.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
-
-	startTime := time.Now()
 
 	if err := e.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
@@ -92,35 +89,21 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	statusCh, errCh := e.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 
 	select {
-	case err := <-errCh:
-		if err != nil {
-			return fmt.Errorf("error waiting for container: %w", err)
+	case statusResult := <-statusCh:
+		if statusResult.StatusCode != 0 {
+			return fmt.Errorf("check failed with exit code %d", statusResult.StatusCode)
 		}
+		_, err := e.readResult(ctx, resp.ID)
+		if err != nil {
+			return fmt.Errorf("failed to read check result: %w", err)
+		}
+		return nil
+	case err := <-errCh:
+		return fmt.Errorf("error waiting for container: %w", err)
 	case <-ctx.Done():
 		e.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
 		return fmt.Errorf("check execution timed out after %v", timeout)
 	}
-
-	var status container.WaitResponse
-	select {
-	case status = <-statusCh:
-	case <-ctx.Done():
-		return fmt.Errorf("check execution timed out after %v", timeout)
-	}
-	duration := time.Since(startTime)
-
-	if status.StatusCode != 0 {
-		return fmt.Errorf("check failed with exit code %d", status.StatusCode)
-	}
-
-	result, err := e.readResult(ctx, resp.ID)
-	if err != nil {
-		return fmt.Errorf("failed to read check result: %w", err)
-	}
-
-	e.printResult(result, duration)
-
-	return nil
 }
 
 func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) []string {
@@ -137,6 +120,7 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) []string {
 
 	if endpoint, ok := check.Env["ENDPOINT"]; ok {
 		env = append(env, fmt.Sprintf("FOGHORN_ENDPOINT=%s", endpoint))
+		env = append(env, fmt.Sprintf("ENDPOINT=%s", endpoint))
 	}
 
 	if timeout := check.Timeout; timeout != "" {
@@ -161,6 +145,23 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) []string {
 	return env
 }
 
+func demultiplexLogs(data []byte) []byte {
+	var result []byte
+	for len(data) >= 8 {
+		streamType := data[0]
+		frameSize := int(data[4])<<24 | int(data[5])<<16 | int(data[6])<<8 | int(data[7])
+		data = data[8:]
+		if frameSize <= len(data) {
+			result = append(result, data[:frameSize]...)
+			data = data[frameSize:]
+		} else {
+			break
+		}
+		_ = streamType
+	}
+	return result
+}
+
 func (e *DockerExecutor) readResult(ctx context.Context, containerID string) (*CheckResult, error) {
 	reader, err := e.cli.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
@@ -177,12 +178,18 @@ func (e *DockerExecutor) readResult(ctx context.Context, containerID string) (*C
 		return nil, fmt.Errorf("failed to read logs: %w", err)
 	}
 
-	logStr := string(logs)
-	logStr = strings.TrimPrefix(logStr, "\x00\x00")
-	logStr = strings.TrimSuffix(logStr, "\n")
+	logStr := string(demultiplexLogs(logs))
+	logStr = strings.TrimSpace(logStr)
 
 	var result CheckResult
 	if err := json.Unmarshal([]byte(logStr), &result); err != nil {
+		openBrace := strings.LastIndex(logStr, "{")
+		if openBrace != -1 {
+			if err := json.Unmarshal([]byte(logStr[openBrace:]), &result); err == nil {
+				return &result, nil
+			}
+		}
+
 		reader, _, err := e.cli.CopyFromContainer(ctx, containerID, "/output/result.json")
 		if err == nil {
 			defer reader.Close()
@@ -199,15 +206,6 @@ func (e *DockerExecutor) readResult(ctx context.Context, containerID string) (*C
 	}
 
 	return &result, nil
-}
-
-func (e *DockerExecutor) printResult(result *CheckResult, duration time.Duration) {
-	fmt.Printf("Status: %s\n", result.Status)
-	fmt.Printf("Message: %s\n", result.Message)
-	if result.Data != nil {
-		fmt.Printf("Data: %v\n", result.Data)
-	}
-	fmt.Printf("Duration: %v\n", duration.Round(time.Millisecond))
 }
 
 func (e *DockerExecutor) Close() error {

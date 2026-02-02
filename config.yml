@@ -1,6 +1,14 @@
 version: "1.0"
 
 ---
+name: "echo-check"
+description: "Simple echo test"
+enabled: true
+image: "foghorn/echo-check:latest"
+schedule:
+  interval: "10s"
+
+---
 name: "http-health-check"
 description: "Checks health of example.com website"
 enabled: true
@@ -12,4 +20,3 @@ env:
   EXPECTED_STATUS: "200"
   WARNING_THRESHOLD_MS: "1000"
   CRITICAL_THRESHOLD_MS: "5000"
-timeout: "10s"

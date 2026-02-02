@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pfarrer/foghorn/logger"
 )
 
 type CheckConfig interface {
@@ -89,6 +91,8 @@ func (s *Scheduler) AddCheck(config CheckConfig) error {
 		Interval:     interval,
 	}
 
+	logger.Info("Added check %s (enabled: %v, next run: %v)", config.GetName(), config.IsEnabled(), nextRun.Format(time.RFC3339))
+
 	return nil
 }
 
@@ -97,15 +101,18 @@ func (s *Scheduler) RemoveCheck(name string) {
 }
 
 func (s *Scheduler) Start(interval time.Duration) {
+	logger.Info("Scheduler started with ticker interval %v", interval)
 	s.ticker = time.NewTicker(interval)
 	go s.run()
 }
 
 func (s *Scheduler) Stop() {
+	logger.Info("Scheduler stopping")
 	if s.ticker != nil {
 		s.ticker.Stop()
 	}
 	close(s.stopChan)
+	logger.Info("Scheduler stopped")
 }
 
 func (s *Scheduler) run() {
@@ -121,6 +128,7 @@ func (s *Scheduler) run() {
 
 func (s *Scheduler) tick() {
 	now := time.Now().In(s.location)
+	logger.Debug("Scheduler tick at %v", now.Format(time.RFC3339))
 
 	s.processQueue()
 
@@ -145,6 +153,7 @@ func (s *Scheduler) processQueue() {
 		s.queue = s.queue[1:]
 
 		if check, exists := s.checks[checkConfig.GetName()]; exists {
+			logger.Info("Processing queued check: %s (running: %d, queued: %d)", checkConfig.GetName(), s.runningChecks, len(s.queue))
 			s.executeCheck(checkConfig.GetName(), check)
 		}
 	}
@@ -152,6 +161,7 @@ func (s *Scheduler) processQueue() {
 
 func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 	if s.maxConcurrentChecks > 0 && s.runningChecks >= s.maxConcurrentChecks {
+		logger.Debug("Queuing check %s (concurrency limit reached: %d)", name, s.maxConcurrentChecks)
 		s.queue = append(s.queue, check.Config)
 		return
 	}
@@ -160,6 +170,8 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 	s.runningChecks++
 	now := time.Now().In(s.location)
 	check.LastRun = &now
+
+	logger.Info("Executing check: %s (next run: %v)", name, check.NextRun.Format(time.RFC3339))
 
 	go func() {
 		defer func() {
@@ -175,10 +187,11 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 				}
 			}
 			check.LastRun = &now
+			logger.Debug("Check %s completed (next run: %v)", name, check.NextRun.Format(time.RFC3339))
 		}()
 
 		if err := s.executor.Execute(check.Config); err != nil {
-			fmt.Printf("Error executing check %s: %v\n", name, err)
+			logger.Error("Error executing check %s: %v", name, err)
 		}
 	}()
 }

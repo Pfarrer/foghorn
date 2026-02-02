@@ -13,7 +13,7 @@ func TestVerifyImageAvailability_NoChecks(t *testing.T) {
 		Checks: []config.CheckConfig{},
 	}
 
-	err := verifyImageAvailabilityFn(cfg, false)
+	err := verifyImageAvailabilityFn(cfg)
 	if err != nil {
 		t.Errorf("Expected no error with no checks, got: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestVerifyImageAvailability_NoEnabledChecks(t *testing.T) {
 		},
 	}
 
-	err := verifyImageAvailabilityFn(cfg, false)
+	err := verifyImageAvailabilityFn(cfg)
 	if err != nil {
 		t.Errorf("Expected no error with no enabled checks, got: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestVerifyImageAvailability_MissingImage(t *testing.T) {
 		},
 	}
 
-	err = verifyImageAvailabilityFn(cfg, false)
+	err = verifyImageAvailabilityFn(cfg)
 	if err == nil {
 		t.Error("Expected error for missing image, got nil")
 	}
@@ -94,7 +94,7 @@ func TestVerifyImageAvailability_ExistingImage(t *testing.T) {
 		},
 	}
 
-	err = verifyImageAvailabilityFn(cfg, false)
+	err = verifyImageAvailabilityFn(cfg)
 	if err != nil {
 		t.Errorf("Expected no error for existing image, got: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestVerifyImageAvailability_MultipleChecksSameImage(t *testing.T) {
 		},
 	}
 
-	err = verifyImageAvailabilityFn(cfg, false)
+	err = verifyImageAvailabilityFn(cfg)
 	if err == nil {
 		t.Error("Expected error for missing image, got nil")
 	}
@@ -155,7 +155,7 @@ func TestVerifyImageAvailability_MultipleImages(t *testing.T) {
 		},
 	}
 
-	err = verifyImageAvailabilityFn(cfg, false)
+	err = verifyImageAvailabilityFn(cfg)
 	if err == nil {
 		t.Error("Expected error for missing images, got nil")
 	}
@@ -201,7 +201,7 @@ func TestVerifyImageAvailability_MixedMissingAndExisting(t *testing.T) {
 		},
 	}
 
-	err = verifyImageAvailabilityFn(cfg, false)
+	err = verifyImageAvailabilityFn(cfg)
 	if err == nil {
 		t.Error("Expected error for missing image, got nil")
 	}

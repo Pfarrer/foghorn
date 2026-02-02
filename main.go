@@ -13,16 +13,8 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/executor"
+	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
-)
-
-type LogLevel string
-
-const (
-	LogLevelDebug LogLevel = "debug"
-	LogLevelInfo  LogLevel = "info"
-	LogLevelWarn  LogLevel = "warn"
-	LogLevelError LogLevel = "error"
 )
 
 func main() {
@@ -73,6 +65,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	lvl, err := logger.ParseLevel(logLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+	logger.SetGlobal(logger.New(lvl, verbose))
+
 	if configPath == "" {
 		fmt.Fprintf(os.Stderr, "Error: configuration file path is required\n\n")
 		flag.Usage()
@@ -85,33 +85,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	logger.Info("Loaded configuration with %d checks", len(cfg.Checks))
+
 	if verifyImageAvailability {
-		fmt.Println("Validating Docker images...")
-		if err := verifyImageAvailabilityFn(cfg, verbose); err != nil {
+		if err := verifyImageAvailabilityFn(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 	}
 
 	if dryRun {
-		fmt.Println("Configuration validation successful.")
+		logger.Info("Configuration validation successful.")
 		os.Exit(0)
 	}
 
 	dockerExecutor, err := executor.NewDockerExecutor()
 	if err != nil {
+		logger.Error("Error creating Docker executor: %v", err)
 		fmt.Fprintf(os.Stderr, "Error creating Docker executor: %v\n", err)
 		os.Exit(1)
 	}
 	defer dockerExecutor.Close()
 
 	maxConcurrent := cfg.MaxConcurrentChecks
+	if maxConcurrent > 0 {
+		logger.Info("Maximum concurrent checks: %d", maxConcurrent)
+	}
 	sched := scheduler.NewScheduler(dockerExecutor, time.UTC, maxConcurrent)
 
 	for i := range cfg.Checks {
 		check := &cfg.Checks[i]
 		adapter := scheduler.NewConfigAdapter(check)
 		if err := sched.AddCheck(adapter); err != nil {
+			logger.Error("Error adding check %s: %v", check.Name, err)
 			fmt.Fprintf(os.Stderr, "Error adding check %s: %v\n", check.Name, err)
 		}
 	}
@@ -125,21 +131,15 @@ func main() {
 	sched.Stop()
 }
 
-func validateLogLevel(level LogLevel) error {
-	switch level {
-	case LogLevelDebug, LogLevelInfo, LogLevelWarn, LogLevelError:
-		return nil
-	default:
-		return fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", level)
-	}
-}
-
-func verifyImageAvailabilityFn(cfg *config.Config, verbose bool) error {
+func verifyImageAvailabilityFn(cfg *config.Config) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
+		logger.Error("Failed to connect to Docker daemon: %v", err)
 		return fmt.Errorf("failed to connect to Docker daemon: %w", err)
 	}
 	defer cli.Close()
+
+	logger.Info("Validating Docker images...")
 
 	imageChecks := make(map[string][]string)
 	enabledChecks := 0
@@ -153,16 +153,23 @@ func verifyImageAvailabilityFn(cfg *config.Config, verbose bool) error {
 		}
 	}
 
+	logger.Debug("Checking %d images for %d enabled checks", len(imageChecks), enabledChecks)
+
 	missingImages := make(map[string][]string)
 
 	for image, checkNames := range imageChecks {
+		logger.Debug("Checking image: %s", image)
 		_, _, err := cli.ImageInspectWithRaw(context.Background(), image)
 		if err != nil {
 			if client.IsErrNotFound(err) {
+				logger.Warn("Image %s not available locally (required by: %s)", image, strings.Join(checkNames, ", "))
 				missingImages[image] = checkNames
 			} else {
+				logger.Error("Error checking image %s: %v", image, err)
 				return fmt.Errorf("error checking image %s: %w", image, err)
 			}
+		} else {
+			logger.Debug("Image %s is available", image)
 		}
 	}
 
@@ -179,9 +186,9 @@ func verifyImageAvailabilityFn(cfg *config.Config, verbose bool) error {
 		return fmt.Errorf("%s", builder.String())
 	}
 
-	fmt.Println("\nAll Docker images validated successfully:")
+	logger.Info("All Docker images validated successfully:")
 	for image := range imageChecks {
-		fmt.Printf("  - %s ✓\n", image)
+		logger.Info("  - %s ✓", image)
 	}
 
 	return nil

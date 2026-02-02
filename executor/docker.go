@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
+	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
 )
 
@@ -53,6 +54,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	}
 
 	checkConfig := adapter.Config
+	checkName := checkConfig.Name
 
 	timeout := e.defaultTimeout
 	if checkConfig.Timeout != "" {
@@ -61,6 +63,8 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 			timeout = parsedTimeout
 		}
 	}
+
+	logger.Debug("Check %s: Creating container with image %s (timeout: %v)", checkName, checkConfig.Image, timeout)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -78,29 +82,38 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
+		logger.Error("Check %s: Failed to create container: %v", checkName, err)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
+	logger.Debug("Check %s: Container created (ID: %s)", checkName, resp.ID)
 	defer e.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
 
 	if err := e.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		logger.Error("Check %s: Failed to start container: %v", checkName, err)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
+	logger.Debug("Check %s: Container started (ID: %s)", checkName, resp.ID)
 
 	statusCh, errCh := e.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 
 	select {
 	case statusResult := <-statusCh:
 		if statusResult.StatusCode != 0 {
+			logger.Error("Check %s: Failed with exit code %d", checkName, statusResult.StatusCode)
 			return fmt.Errorf("check failed with exit code %d", statusResult.StatusCode)
 		}
-		_, err := e.readResult(ctx, resp.ID)
+		result, err := e.readResult(ctx, resp.ID)
 		if err != nil {
+			logger.Error("Check %s: Failed to read result: %v", checkName, err)
 			return fmt.Errorf("failed to read check result: %w", err)
 		}
+		logger.Info("Check %s: Completed with status %s (duration: %dms)", checkName, result.Status, result.DurationMs)
 		return nil
 	case err := <-errCh:
+		logger.Error("Check %s: Error waiting for container: %v", checkName, err)
 		return fmt.Errorf("error waiting for container: %w", err)
 	case <-ctx.Done():
+		logger.Warn("Check %s: Execution timed out after %v", checkName, timeout)
 		e.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
 		return fmt.Errorf("check execution timed out after %v", timeout)
 	}

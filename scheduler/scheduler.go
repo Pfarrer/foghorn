@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pfarrer/foghorn/logger"
@@ -23,15 +24,19 @@ type IntervalCheckConfig interface {
 
 type CheckExecutor interface {
 	Execute(check CheckConfig) error
+	SetResultCallback(callback func(checkName string, status string, duration time.Duration))
 }
 
 type ScheduledCheck struct {
 	Config       CheckConfig
 	NextRun      time.Time
 	LastRun      *time.Time
+	LastStatus   string
+	LastDuration time.Duration
 	Running      bool
 	ScheduleType ScheduleType
 	Interval     time.Duration
+	IsQueued     bool
 }
 
 type Scheduler struct {
@@ -43,20 +48,27 @@ type Scheduler struct {
 	maxConcurrentChecks int
 	runningChecks       int
 	queue               []CheckConfig
+	startTime           time.Time
+	mu                  sync.RWMutex
 }
 
 func NewScheduler(executor CheckExecutor, location *time.Location, maxConcurrentChecks int) *Scheduler {
 	if location == nil {
 		location = time.UTC
 	}
-	return &Scheduler{
+	s := &Scheduler{
 		checks:              make(map[string]*ScheduledCheck),
 		executor:            executor,
 		stopChan:            make(chan struct{}),
 		location:            location,
 		maxConcurrentChecks: maxConcurrentChecks,
 		queue:               make([]CheckConfig, 0),
+		startTime:           time.Now(),
 	}
+
+	executor.SetResultCallback(s.handleCheckResult)
+
+	return s
 }
 
 func (s *Scheduler) AddCheck(config CheckConfig) error {
@@ -89,6 +101,7 @@ func (s *Scheduler) AddCheck(config CheckConfig) error {
 		NextRun:      nextRun,
 		ScheduleType: scheduleType,
 		Interval:     interval,
+		LastStatus:   "unknown",
 	}
 
 	logger.Info("Added check %s (enabled: %v, next run: %v)", config.GetName(), config.IsEnabled(), nextRun.Format(time.RFC3339))
@@ -154,8 +167,20 @@ func (s *Scheduler) processQueue() {
 
 		if check, exists := s.checks[checkConfig.GetName()]; exists {
 			logger.Info("Processing queued check: %s (running: %d, queued: %d)", checkConfig.GetName(), s.runningChecks, len(s.queue))
+			check.IsQueued = false
 			s.executeCheck(checkConfig.GetName(), check)
 		}
+	}
+
+	for name, check := range s.checks {
+		isInQueue := false
+		for _, queuedCheck := range s.queue {
+			if queuedCheck.GetName() == name {
+				isInQueue = true
+				break
+			}
+		}
+		check.IsQueued = isInQueue
 	}
 }
 
@@ -163,21 +188,25 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 	if s.maxConcurrentChecks > 0 && s.runningChecks >= s.maxConcurrentChecks {
 		logger.Debug("Queuing check %s (concurrency limit reached: %d)", name, s.maxConcurrentChecks)
 		s.queue = append(s.queue, check.Config)
+		check.IsQueued = true
 		return
 	}
 
 	check.Running = true
+	check.IsQueued = false
 	s.runningChecks++
 	now := time.Now().In(s.location)
 	check.LastRun = &now
 
 	logger.Info("Executing check: %s (next run: %v)", name, check.NextRun.Format(time.RFC3339))
 
+	startTime := time.Now()
 	go func() {
 		defer func() {
 			check.Running = false
 			s.runningChecks--
 			now := time.Now().In(s.location)
+			check.LastDuration = now.Sub(startTime)
 			if check.ScheduleType == ScheduleTypeInterval && check.Interval > 0 {
 				check.NextRun = now.Add(check.Interval)
 			} else {
@@ -239,10 +268,55 @@ func parseInterval(interval string) (time.Duration, error) {
 }
 
 func (s *Scheduler) GetCheckStatus(name string) (*ScheduledCheck, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	check, exists := s.checks[name]
 	return check, exists
 }
 
 func (s *Scheduler) GetAllChecks() map[string]*ScheduledCheck {
-	return s.checks
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make(map[string]*ScheduledCheck, len(s.checks))
+	for k, v := range s.checks {
+		result[k] = v
+	}
+	return result
+}
+
+func (s *Scheduler) GetStartTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.startTime
+}
+
+func (s *Scheduler) GetCounts() (total, running, queued, pass, fail, warn int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	total = len(s.checks)
+	running = s.runningChecks
+	queued = len(s.queue)
+
+	for _, check := range s.checks {
+		switch check.LastStatus {
+		case "pass":
+			pass++
+		case "fail":
+			fail++
+		case "warn":
+			warn++
+		}
+	}
+
+	return
+}
+
+func (s *Scheduler) handleCheckResult(checkName string, status string, duration time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if check, exists := s.checks[checkName]; exists {
+		check.LastStatus = status
+		check.LastDuration = duration
+	}
 }

@@ -46,18 +46,20 @@ Add a read-only terminal user interface (TUI) dashboard for real-time monitoring
 - Time format: relative time for last run (e.g., "2m ago", "30s ago"), countdown for next run (e.g., "in 45s")
 
 ## Acceptance Criteria
-- [ ] `--tui` flag enables TUI dashboard mode
-- [ ] Header shows Foghorn title and uptime
-- [ ] Summary bar shows accurate counters (total, running, queued, pass, fail, warn)
-- [ ] Check list displays all configured checks
-- [ ] Check status indicator shows correct state (running, queued, idle)
-- [ ] Last check result shows correct status symbol (✓, ✗, ⚠, ?)
-- [ ] Last run time shows relative time (e.g., "2m ago")
-- [ ] Next run time shows countdown (e.g., "in 45s")
-- [ ] Dashboard refreshes every second automatically
-- [ ] Dashboard handles terminal resize without crashing
-- [ ] No user interaction is required or possible (read-only)
-- [ ] Ctrl+C exits cleanly
-- [ ] Check list scrolls if more than 20 checks
-- [ ] Status colors are used appropriately (green=pass, red=fail, yellow=warn)
-- [ ] Works with both interval-based and cron-scheduled checks
+- [x] `--tui` flag enables TUI dashboard mode
+- [x] Header shows Foghorn title and uptime
+- [x] Summary bar shows accurate counters (total, running, queued, pass, fail, warn)
+- [x] Check list displays all configured checks
+- [x] Check status indicator shows correct state (running, queued, idle)
+- [x] Last check result shows correct status symbol (✓, ✗, ⚠, ?)
+- [x] Last run time shows relative time (e.g., "2m ago")
+- [x] Next run time shows countdown (e.g., "in 45s")
+- [x] Dashboard refreshes every second automatically
+- [x] Dashboard handles terminal resize without crashing
+- [x] No user interaction is required or possible (read-only)
+- [x] Ctrl+C exits cleanly
+- [x] Check list scrolls if more than 20 checks
+- [x] Status colors are used appropriately (green=pass, red=fail, yellow=warn)
+- [x] Works with both interval-based and cron-scheduled checks
+
+Passes: true

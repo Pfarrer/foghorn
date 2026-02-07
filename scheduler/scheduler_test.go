@@ -53,6 +53,7 @@ func (m *IntervalMockCheckConfig) GetInterval() string {
 
 type MockExecutor struct {
 	executed []string
+	callback func(checkName string, status string, duration time.Duration)
 }
 
 func (m *MockExecutor) Execute(check CheckConfig) error {
@@ -60,15 +61,24 @@ func (m *MockExecutor) Execute(check CheckConfig) error {
 	return nil
 }
 
+func (m *MockExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+	m.callback = callback
+}
+
 type SlowExecutor struct {
 	executed []string
 	blocker  chan struct{}
+	callback func(checkName string, status string, duration time.Duration)
 }
 
 func (m *SlowExecutor) Execute(check CheckConfig) error {
 	m.executed = append(m.executed, check.GetName())
 	<-m.blocker
 	return nil
+}
+
+func (m *SlowExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+	m.callback = callback
 }
 
 func TestParseCronExpression(t *testing.T) {

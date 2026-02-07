@@ -88,6 +88,14 @@ func SetVerbose(verbose bool) {
 	}
 }
 
+func SetOutput(w io.Writer) {
+	if global != nil {
+		global.mu.Lock()
+		global.output = w
+		global.mu.Unlock()
+	}
+}
+
 func ParseLevel(levelStr string) (LogLevel, error) {
 	switch levelStr {
 	case "error":

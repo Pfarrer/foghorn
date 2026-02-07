@@ -4,17 +4,20 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/executor"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
+	"github.com/pfarrer/foghorn/tui"
 )
 
 func main() {
@@ -25,6 +28,7 @@ func main() {
 		verbose                 bool
 		dryRun                  bool
 		verifyImageAvailability bool
+		tuiMode                 bool
 	)
 
 	flag.BoolVar(&help, "h", false, "Show help message")
@@ -39,6 +43,8 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Validate configuration only")
 	flag.BoolVar(&verifyImageAvailability, "i", false, "Verify all Docker images in config are available locally")
 	flag.BoolVar(&verifyImageAvailability, "verify-image-availability", false, "Verify all Docker images in config are available locally")
+	flag.BoolVar(&tuiMode, "tui", false, "Enable TUI dashboard mode")
+	flag.BoolVar(&tuiMode, "t", false, "Enable TUI dashboard mode")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
@@ -54,6 +60,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "      Validate configuration only\n")
 		fmt.Fprintf(os.Stderr, "  -i, --verify-image-availability\n")
 		fmt.Fprintf(os.Stderr, "      Verify all Docker images in config are available locally\n")
+		fmt.Fprintf(os.Stderr, "  -t, --tui\n")
+		fmt.Fprintf(os.Stderr, "      Enable TUI dashboard mode\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help\n")
 		fmt.Fprintf(os.Stderr, "      Show help message\n")
 	}
@@ -124,9 +132,21 @@ func main() {
 
 	sched.Start(1 * time.Second)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	if tuiMode {
+		logger.SetOutput(io.Discard)
+		model := tui.NewModel(sched, logLevel)
+		p := tea.NewProgram(model)
+		if _, err := p.Run(); err != nil {
+			logger.SetOutput(os.Stdout)
+			logger.Error("Error running TUI: %v", err)
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+		}
+		logger.SetOutput(os.Stdout)
+	} else {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+	}
 
 	sched.Stop()
 }

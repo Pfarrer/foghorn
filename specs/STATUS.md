@@ -16,11 +16,11 @@ These specs have been implemented and all acceptance criteria pass.
 - [Docker Image Build and Publish](docker-image-build-publish.md)
 - [Standard HTTP Status Check](standard-http-check.md)
 - [Basic Logging Implementation](basic-logging-implementation.md)
+- [TUI Dashboard Display](tui-dashboard-display.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
-- [TUI Dashboard Display](tui-dashboard-display.md)
 - [Check Execution History Tracking](check-execution-history.md)
 - [Standard DNS Check](standard-dns-check.md)
 - [Standard Port Check](standard-port-check.md)

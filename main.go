@@ -18,6 +18,7 @@ import (
 	"github.com/pfarrer/foghorn/imageresolver"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
+	"github.com/pfarrer/foghorn/state"
 	"github.com/pfarrer/foghorn/tui"
 )
 
@@ -30,6 +31,7 @@ func main() {
 		dryRun                  bool
 		verifyImageAvailability bool
 		tuiMode                 bool
+		stateLogFile            string
 	)
 
 	flag.BoolVar(&help, "h", false, "Show help message")
@@ -46,6 +48,9 @@ func main() {
 	flag.BoolVar(&verifyImageAvailability, "verify-image-availability", false, "Verify all Docker images in config are available locally")
 	flag.BoolVar(&tuiMode, "tui", false, "Enable TUI dashboard mode")
 	flag.BoolVar(&tuiMode, "t", false, "Enable TUI dashboard mode")
+	flag.StringVar(&stateLogFile, "s", "", "Path to state log file")
+	flag.StringVar(&stateLogFile, "state-log-file", "", "Path to state log file")
+	flag.StringVar(&stateLogFile, "state_log_file", "", "Path to state log file")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
@@ -63,6 +68,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "      Verify all Docker images in config are available locally\n")
 		fmt.Fprintf(os.Stderr, "  -t, --tui\n")
 		fmt.Fprintf(os.Stderr, "      Enable TUI dashboard mode\n")
+		fmt.Fprintf(os.Stderr, "  -s, --state-log-file <path>\n")
+		fmt.Fprintf(os.Stderr, "      Path to state log file\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help\n")
 		fmt.Fprintf(os.Stderr, "      Show help message\n")
 	}
@@ -96,6 +103,47 @@ func main() {
 
 	logger.Info("Loaded configuration with %d checks", len(cfg.Checks))
 
+	stateLogPath := stateLogFile
+	if stateLogPath == "" {
+		stateLogPath = cfg.StateLogFile
+	}
+
+	var stateRecords map[string]scheduler.CheckState
+	var stateLog *state.StateLog
+	if stateLogPath != "" {
+		if cfg.StateLogPeriod == "" {
+			fmt.Fprintf(os.Stderr, "Error: state_log_period is required when state_log_file is set\n")
+			os.Exit(1)
+		}
+		retention, err := time.ParseDuration(cfg.StateLogPeriod)
+		if err != nil || retention <= 0 {
+			fmt.Fprintf(os.Stderr, "Error: state_log_period must be a positive duration\n")
+			os.Exit(1)
+		}
+
+		stateLog, err = state.Open(stateLogPath, retention)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening state log: %v\n", err)
+			os.Exit(1)
+		}
+		defer stateLog.Close()
+
+		records, err := stateLog.Load()
+		if err != nil {
+			logger.Warn("Failed to load state log: %v", err)
+		} else {
+			latest := state.LatestByCheck(records)
+			stateRecords = make(map[string]scheduler.CheckState, len(latest))
+			for name, record := range latest {
+				stateRecords[name] = scheduler.CheckState{
+					LastStatus:   record.Status,
+					LastDuration: time.Duration(record.DurationMs) * time.Millisecond,
+					LastRun:      record.CompletedAt,
+				}
+			}
+		}
+	}
+
 	if verifyImageAvailability {
 		if err := verifyImageAvailabilityFn(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -121,6 +169,9 @@ func main() {
 		logger.Info("Maximum concurrent checks: %d", maxConcurrent)
 	}
 	sched := scheduler.NewScheduler(dockerExecutor, time.UTC, maxConcurrent)
+	if stateLog != nil {
+		sched.SetResultLogger(stateLog)
+	}
 
 	for i := range cfg.Checks {
 		check := &cfg.Checks[i]
@@ -129,6 +180,10 @@ func main() {
 			logger.Error("Error adding check %s: %v", check.Name, err)
 			fmt.Fprintf(os.Stderr, "Error adding check %s: %v\n", check.Name, err)
 		}
+	}
+
+	if len(stateRecords) > 0 {
+		sched.ApplyState(stateRecords)
 	}
 
 	sched.Start(1 * time.Second)

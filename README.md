@@ -29,6 +29,7 @@ Foghorn supports the following command-line flags:
 - `-v, --verbose`: Enable verbose logging with timestamps and source file locations
 - `-d, --dry-run`: Validate configuration only without running the scheduler
 - `-i, --verify-image-availability`: Verify all Docker images in config are available locally
+- `--state-log-file <path>`: Persist check results to a state log file
 - `-h, --help`: Display help message and usage information
 
 ### Examples
@@ -138,6 +139,8 @@ Check containers must use semantic version tags. Supported selectors are `MAJOR`
 
 - `version`: Configuration file version (optional)
 - `max_concurrent_checks`: Maximum number of checks that can run simultaneously (optional, defaults to unlimited)
+- `state_log_period`: Retention period for state log records (optional, required when state log file is set)
+- `state_log_file`: Optional state log file path (CLI `--state-log-file` overrides)
 
 ### Concurrency Control
 

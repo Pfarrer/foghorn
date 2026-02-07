@@ -1,4 +1,5 @@
 version: "1.0"
+state_log_period: "24h"
 
 ---
 name: "echo-check"

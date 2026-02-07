@@ -50,6 +50,11 @@ type Scheduler struct {
 	queue               []CheckConfig
 	startTime           time.Time
 	mu                  sync.RWMutex
+	resultLogger        ResultLogger
+}
+
+type ResultLogger interface {
+	RecordResult(checkName string, status string, duration time.Duration, completedAt time.Time) error
 }
 
 func NewScheduler(executor CheckExecutor, location *time.Location, maxConcurrentChecks int) *Scheduler {
@@ -69,6 +74,12 @@ func NewScheduler(executor CheckExecutor, location *time.Location, maxConcurrent
 	executor.SetResultCallback(s.handleCheckResult)
 
 	return s
+}
+
+func (s *Scheduler) SetResultLogger(logger ResultLogger) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resultLogger = logger
 }
 
 func (s *Scheduler) AddCheck(config CheckConfig) error {
@@ -318,5 +329,43 @@ func (s *Scheduler) handleCheckResult(checkName string, status string, duration 
 	if check, exists := s.checks[checkName]; exists {
 		check.LastStatus = status
 		check.LastDuration = duration
+	}
+
+	if s.resultLogger != nil {
+		completedAt := time.Now().In(s.location)
+		if err := s.resultLogger.RecordResult(checkName, status, duration, completedAt); err != nil {
+			logger.Error("Failed to persist state for %s: %v", checkName, err)
+		}
+	}
+}
+
+type CheckState struct {
+	LastStatus   string
+	LastDuration time.Duration
+	LastRun      time.Time
+}
+
+func (s *Scheduler) ApplyState(states map[string]CheckState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for name, state := range states {
+		check, exists := s.checks[name]
+		if !exists {
+			continue
+		}
+		if state.LastStatus != "" {
+			check.LastStatus = state.LastStatus
+		}
+		if state.LastDuration > 0 {
+			check.LastDuration = state.LastDuration
+		}
+		if !state.LastRun.IsZero() {
+			lastRun := state.LastRun
+			check.LastRun = &lastRun
+			if check.ScheduleType == ScheduleTypeInterval && check.Interval > 0 {
+				check.NextRun = lastRun.Add(check.Interval)
+			}
+		}
 	}
 }

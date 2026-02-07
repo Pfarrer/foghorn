@@ -636,3 +636,40 @@ func TestMixedCronAndIntervalScheduling(t *testing.T) {
 		t.Errorf("Expected interval check to have schedule type interval, got %v", intervalStatus.ScheduleType)
 	}
 }
+
+func TestApplyStateUpdatesIntervalNextRun(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	check := &IntervalMockCheckConfig{
+		name:     "interval-check",
+		schedule: "10s",
+		enabled:  true,
+		interval: "10s",
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("failed to add check: %v", err)
+	}
+
+	lastRun := time.Now().UTC().Add(-5 * time.Minute)
+	scheduler.ApplyState(map[string]CheckState{
+		"interval-check": {
+			LastStatus:   "pass",
+			LastDuration: 2 * time.Second,
+			LastRun:      lastRun,
+		},
+	})
+
+	status, ok := scheduler.GetCheckStatus("interval-check")
+	if !ok {
+		t.Fatalf("check not found after apply state")
+	}
+	expectedNext := lastRun.Add(10 * time.Second)
+	if !status.NextRun.Equal(expectedNext) {
+		t.Fatalf("expected next run %v, got %v", expectedNext, status.NextRun)
+	}
+	if status.LastStatus != "pass" {
+		t.Fatalf("expected last status pass, got %s", status.LastStatus)
+	}
+}

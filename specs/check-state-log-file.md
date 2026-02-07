@@ -21,9 +21,11 @@ Add a CLI argument to persist recent check results to a state log file and resto
 - Handle missing or corrupt state log file gracefully.
 
 ## Acceptance Criteria
-- [ ] CLI supports `state_log_file`.
-- [ ] Config supports `state_log_period`.
-- [ ] Results are persisted to the state log file.
-- [ ] Records older than the retention period are removed automatically.
-- [ ] On restart, the scheduler restores intervals using the last stored results.
-- [ ] Missing or invalid state log file does not crash startup.
+- [x] CLI supports `state_log_file`.
+- [x] Config supports `state_log_period`.
+- [x] Results are persisted to the state log file.
+- [x] Records older than the retention period are removed automatically.
+- [x] On restart, the scheduler restores intervals using the last stored results.
+- [x] Missing or invalid state log file does not crash startup.
+
+Passes: true

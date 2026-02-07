@@ -19,7 +19,9 @@ Lock the state file during runtime and prevent multiple instances from sharing t
 - Release the lock on shutdown.
 
 ## Acceptance Criteria
-- [ ] The state log file is locked while Foghorn is running.
-- [ ] A second instance using the same state file fails to start.
-- [ ] The failure reports a clear error message.
-- [ ] The lock is released on shutdown.
+- [x] The state log file is locked while Foghorn is running.
+- [x] A second instance using the same state file fails to start.
+- [x] The failure reports a clear error message.
+- [x] The lock is released on shutdown.
+
+Passes: true

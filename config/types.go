@@ -31,4 +31,6 @@ type Config struct {
 	Global              map[string]interface{} `yaml:"global,omitempty"`
 	Version             string                 `yaml:"version,omitempty"`
 	MaxConcurrentChecks int                    `yaml:"max_concurrent_checks,omitempty"`
+	StateLogFile        string                 `yaml:"state_log_file,omitempty"`
+	StateLogPeriod      string                 `yaml:"state_log_period,omitempty"`
 }

@@ -1,5 +1,6 @@
 version: "1.0"
 max_concurrent_checks: 5
+state_log_period: "24h"
 
 ---
 name: "disk-space-check"

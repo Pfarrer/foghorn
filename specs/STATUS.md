@@ -17,13 +17,13 @@ These specs have been implemented and all acceptance criteria pass.
 - [Standard HTTP Status Check](standard-http-check.md)
 - [Basic Logging Implementation](basic-logging-implementation.md)
 - [TUI Dashboard Display](tui-dashboard-display.md)
+- [Local Check Containers](local-check-containers.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
 - [Check State Log File](check-state-log-file.md)
 - [State File Locking](state-file-locking.md)
-- [Local Check Containers](local-check-containers.md)
 - [Auto-Update Check Containers](auto-update-check-containers.md)
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)

@@ -116,6 +116,7 @@ By default, Foghorn reads JSON output from container stdout. Alternatively, cont
 ### Example Check Container
 
 See `examples/docker-check/` for a complete example of a Docker container that implements the Foghorn check interface.
+Built-in check containers live under `containers/` and are published to GHCR on change.
 
 ## Configuration
 

@@ -19,7 +19,10 @@ Define common check containers in-repo and build/release them automatically when
 - Release process should tag/publish images consistently with existing conventions.
 
 ## Acceptance Criteria
-- [ ] A root containers folder exists with per-container subfolders.
-- [ ] Each container subfolder includes a `README.md`.
-- [ ] GitHub Action builds and releases a container when its folder changes.
-- [ ] Unchanged containers are not rebuilt.
+- [x] A root containers folder exists with per-container subfolders.
+- [x] Each container subfolder includes a `README.md`.
+- [x] GitHub Action builds and releases a container when its folder changes.
+- [x] Unchanged containers are not rebuilt.
+
+## Passes
+true

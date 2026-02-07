@@ -60,7 +60,7 @@ func TestValidateRequiredFields(t *testing.T) {
 	}{
 		{
 			name:    "missing name",
-			config:  "checks:\n  - image: test\n    schedule:\n      cron: '* * * * *'\n    evaluation: []\n    enabled: true",
+			config:  "checks:\n  - image: test/image:1.0.0\n    schedule:\n      cron: '* * * * *'\n    evaluation: []\n    enabled: true",
 			wantErr: true,
 			errMsg:  "name is required",
 		},
@@ -72,25 +72,37 @@ func TestValidateRequiredFields(t *testing.T) {
 		},
 		{
 			name:    "missing schedule",
-			config:  "checks:\n  - name: test\n    image: test\n    evaluation: []\n    enabled: true",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    evaluation: []\n    enabled: true",
 			wantErr: true,
 			errMsg:  "schedule (cron or interval) is required",
 		},
 		{
 			name:    "both cron and interval",
-			config:  "checks:\n  - name: test\n    image: test\n    schedule:\n      cron: '* * * * *'\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      cron: '* * * * *'\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: true,
 			errMsg:  "only one of cron or interval should be specified",
 		},
 		{
 			name:    "valid config with cron",
-			config:  "checks:\n  - name: test\n    image: test\n    schedule:\n      cron: '* * * * *'\n    evaluation: []\n    enabled: true",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      cron: '* * * * *'\n    evaluation: []\n    enabled: true",
 			wantErr: false,
 		},
 		{
 			name:    "valid config with interval",
-			config:  "checks:\n  - name: test\n    image: test\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: false,
+		},
+		{
+			name:    "invalid image tag",
+			config:  "checks:\n  - name: test\n    image: test/image:latest\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "invalid image tag",
+		},
+		{
+			name:    "missing image tag",
+			config:  "checks:\n  - name: test\n    image: test/image\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "invalid image tag",
 		},
 	}
 
@@ -148,9 +160,9 @@ func TestPrintSummary(t *testing.T) {
 	cfg := &Config{
 		Version: "1.0",
 		Checks: []CheckConfig{
-			{Name: "check1", Image: "img1", Schedule: Schedule{Cron: "* * * * *"}, Evaluation: []EvaluationRule{}, Enabled: true},
-			{Name: "check2", Image: "img2", Schedule: Schedule{Interval: "1m"}, Evaluation: []EvaluationRule{}, Enabled: true},
-			{Name: "check3", Image: "img3", Schedule: Schedule{Cron: "* * * * *"}, Evaluation: []EvaluationRule{}, Enabled: false},
+			{Name: "check1", Image: "img1:1.0.0", Schedule: Schedule{Cron: "* * * * *"}, Evaluation: []EvaluationRule{}, Enabled: true},
+			{Name: "check2", Image: "img2:1.0.0", Schedule: Schedule{Interval: "1m"}, Evaluation: []EvaluationRule{}, Enabled: true},
+			{Name: "check3", Image: "img3:1.0.0", Schedule: Schedule{Cron: "* * * * *"}, Evaluation: []EvaluationRule{}, Enabled: false},
 		},
 	}
 

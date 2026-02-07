@@ -18,6 +18,7 @@ These specs have been implemented and all acceptance criteria pass.
 - [Basic Logging Implementation](basic-logging-implementation.md)
 - [TUI Dashboard Display](tui-dashboard-display.md)
 - [Local Check Containers](local-check-containers.md)
+- [Versioned Check Container Releases](versioned-check-container-releases.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.

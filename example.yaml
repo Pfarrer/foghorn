@@ -8,7 +8,7 @@ tags:
   - "infrastructure"
   - "storage"
 enabled: true
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1"
 schedule:
   cron: "*/5 * * * *"
 evaluation:
@@ -30,7 +30,7 @@ tags:
   - "api"
   - "health"
 enabled: true
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0"
 schedule:
   interval: "1m"
 evaluation:
@@ -51,7 +51,7 @@ tags:
   - "database"
   - "performance"
 enabled: true
-image: "foghorn/postgres-check:latest"
+image: "foghorn/postgres-check:1.2.3"
 schedule:
   cron: "0,15,30,45 * * * *"
 evaluation:
@@ -76,7 +76,7 @@ tags:
   - "infrastructure"
   - "performance"
 enabled: false
-image: "foghorn/memory-check:latest"
+image: "foghorn/memory-check:2"
 schedule:
   interval: "30s"
 evaluation:

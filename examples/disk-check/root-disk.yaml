@@ -5,7 +5,7 @@ tags:
   - "disk"
   - "system"
 enabled: true
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:

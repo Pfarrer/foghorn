@@ -4,9 +4,9 @@ set -e
 
 START_TIME=$(date +%s%3N)
 
-URL="${FOGHORN_ENDPOINT:-${URL:-https://example.com}}"
+URL="${CHECK_URL:-https://example.com}"
 EXPECTED_STATUS="${EXPECTED_STATUS:-200}"
-TIMEOUT="${FOGHORN_TIMEOUT:-10s}"
+TIMEOUT="${REQUEST_TIMEOUT:-10s}"
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$URL" 2>&1 || echo "000")
 

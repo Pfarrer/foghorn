@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that performs HTTP/HTTPS status checks on web endpoints
 
 ## Usage Steps
-1. User pulls the standard HTTP check image: `foghorn/http-check:latest`
+1. User pulls the standard HTTP check image: `foghorn/http-check:1.0.0`
 2. Configure check with target URL and expected status/behavior
 3. Foghorn runs the container on schedule
 4. Container performs HTTP request and outputs results
@@ -73,7 +73,7 @@ Use Alpine Linux with `curl` or Go-based implementation for better control
 ## Example Configuration
 ```yaml
 name: "api-health-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "1m"
 env:
@@ -86,7 +86,7 @@ timeout: "30s"
 
 ```yaml
 name: "website-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:

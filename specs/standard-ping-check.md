@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that performs ICMP ping checks to monitor host connectivity and latency
 
 ## Usage Steps
-1. User pulls the standard ping check image: `foghorn/ping-check:latest`
+1. User pulls the standard ping check image: `foghorn/ping-check:1.0.0`
 2. Configure check with target host and optional parameters
 3. Foghorn runs the container on schedule
 4. Container performs ping and outputs results
@@ -63,7 +63,7 @@ Use lightweight Alpine Linux image with `iputils-ping` package
 ## Example Configuration
 ```yaml
 name: "google-ping"
-image: "foghorn/ping-check:latest"
+image: "foghorn/ping-check:1.0.0"
 schedule:
   cron: "*/5 * * * *"
 env:

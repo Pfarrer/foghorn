@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that checks TCP/UDP port connectivity and service availability
 
 ## Usage Steps
-1. User pulls the standard port check image: `foghorn/port-check:latest`
+1. User pulls the standard port check image: `foghorn/port-check:1.0.0`
 2. Configure check with target host, port, and protocol
 3. Foghorn runs the container on schedule
 4. Container attempts connection and outputs results
@@ -71,7 +71,7 @@ Use Alpine Linux with `netcat-openbsd` or Go implementation for better control
 ## Example Configuration
 ```yaml
 name: "ssh-port-check"
-image: "foghorn/port-check:latest"
+image: "foghorn/port-check:1.0.0"
 schedule:
   cron: "*/2 * * * *"
 env:
@@ -85,7 +85,7 @@ timeout: "10s"
 
 ```yaml
 name: "database-port-check"
-image: "foghorn/port-check:latest"
+image: "foghorn/port-check:1.0.0"
 schedule:
   interval: "30s"
 env:

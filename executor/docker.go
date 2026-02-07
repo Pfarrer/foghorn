@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
+	"github.com/pfarrer/foghorn/imageresolver"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
 )
@@ -28,6 +30,8 @@ type DockerExecutor struct {
 	defaultTimeout time.Duration
 	outputLocation string
 	resultCallback func(checkName string, status string, duration time.Duration)
+	resolveMu      sync.Mutex
+	resolvedImages map[string]string
 }
 
 type ExecuteOptions struct {
@@ -45,6 +49,7 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 		cli:            cli,
 		defaultTimeout: 30 * time.Second,
 		outputLocation: "stdout",
+		resolvedImages: make(map[string]string),
 	}, nil
 }
 
@@ -65,17 +70,27 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		}
 	}
 
-	logger.Debug("Check %s: Creating container with image %s (timeout: %v)", checkName, checkConfig.Image, timeout)
-
 	startTime := time.Now()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	image, err := e.resolveImage(ctx, checkConfig.Image)
+	if err != nil {
+		duration := time.Since(startTime)
+		if e.resultCallback != nil {
+			e.resultCallback(checkName, "error", duration)
+		}
+		logger.Error("Check %s: Failed to resolve image: %v", checkName, err)
+		return err
+	}
+
+	logger.Debug("Check %s: Creating container with image %s (timeout: %v)", checkName, image, timeout)
+
 	env := e.buildEnvVars(checkConfig)
 
 	containerConfig := &container.Config{
-		Image: checkConfig.Image,
+		Image: image,
 		Env:   env,
 	}
 
@@ -257,4 +272,24 @@ func (e *DockerExecutor) Close() error {
 
 func (e *DockerExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
 	e.resultCallback = callback
+}
+
+func (e *DockerExecutor) resolveImage(ctx context.Context, image string) (string, error) {
+	e.resolveMu.Lock()
+	if resolved, ok := e.resolvedImages[image]; ok {
+		e.resolveMu.Unlock()
+		return resolved, nil
+	}
+	e.resolveMu.Unlock()
+
+	resolved, err := imageresolver.Resolve(ctx, e.cli, image)
+	if err != nil {
+		return "", err
+	}
+
+	e.resolveMu.Lock()
+	e.resolvedImages[image] = resolved
+	e.resolveMu.Unlock()
+
+	return resolved, nil
 }

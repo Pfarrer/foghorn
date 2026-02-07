@@ -1,5 +1,5 @@
 name: "website-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:

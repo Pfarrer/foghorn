@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that monitors filesystem free space and usage
 
 ## Usage Steps
-1. User pulls the standard disk space check image: `foghorn/disk-check:latest`
+1. User pulls the standard disk space check image: `foghorn/disk-check:1.0.0`
 2. Configure check with mount point(s) and thresholds
 3. Foghorn runs the container on schedule
 4. Container analyzes disk usage and outputs results
@@ -75,7 +75,7 @@ Use Alpine Linux with `df` command or Go for better parsing
 ## Example Configuration
 ```yaml
 name: "root-disk-space"
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:
@@ -90,7 +90,7 @@ volumes:
 
 ```yaml
 name: "logs-disk-space"
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   interval: "5m"
 env:

@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that performs DNS resolution checks and validates DNS records
 
 ## Usage Steps
-1. User pulls the standard DNS check image: `foghorn/dns-check:latest`
+1. User pulls the standard DNS check image: `foghorn/dns-check:1.0.0`
 2. Configure check with domain name and DNS server
 3. Foghorn runs the container on schedule
 4. Container performs DNS query and outputs results
@@ -84,7 +84,7 @@ Use Alpine Linux with `dig` or `nslookup`, or Go with `miekg/dns` library for be
 ## Example Configuration
 ```yaml
 name: "api-dns-check"
-image: "foghorn/dns-check:latest"
+image: "foghorn/dns-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:
@@ -98,7 +98,7 @@ timeout: "10s"
 
 ```yaml
 name: "mx-record-check"
-image: "foghorn/dns-check:latest"
+image: "foghorn/dns-check:1.0.0"
 schedule:
   interval: "5m"
 env:
@@ -110,7 +110,7 @@ timeout: "10s"
 
 ```yaml
 name: "cdn-ipv6-check"
-image: "foghorn/dns-check:latest"
+image: "foghorn/dns-check:1.0.0"
 schedule:
   cron: "0 * * * *"
 env:

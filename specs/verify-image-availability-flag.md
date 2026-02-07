@@ -37,20 +37,20 @@ Error message format:
 ```
 Error: The following Docker images are not available locally:
 
-- foghorn/disk-check:latest (required by: disk-space-check)
-- foghorn/http-check:latest (required by: api-health-check, website-check)
+- foghorn/disk-check:1.0.0 (required by: disk-space-check)
+- foghorn/http-check:1.0.0 (required by: api-health-check, website-check)
 
 Please pull the missing images:
-  docker pull foghorn/disk-check:latest
-  docker pull foghorn/http-check:latest
+  docker pull foghorn/disk-check:1.0.0
+  docker pull foghorn/http-check:1.0.0
 ```
 
 Success message format:
 ```
 All Docker images validated successfully:
-  - foghorn/disk-check:latest ✓
-  - foghorn/http-check:latest ✓
-  - foghorn/ping-check:latest ✓
+  - foghorn/disk-check:1.0.0 ✓
+  - foghorn/http-check:1.0.0 ✓
+  - foghorn/ping-check:1.0.0 ✓
 ```
 
 Docker API usage:
@@ -100,9 +100,9 @@ Enabled checks: 3
 Max concurrent checks: 5
 
 Validating Docker images...
-  - foghorn/ping-check:latest ✓
-  - foghorn/http-check:latest ✓
-  - foghorn/disk-check:latest ✓
+  - foghorn/ping-check:1.0.0 ✓
+  - foghorn/http-check:1.0.0 ✓
+  - foghorn/disk-check:1.0.0 ✓
 
 All Docker images validated successfully.
 
@@ -119,11 +119,11 @@ Enabled checks: 3
 Validating Docker images...
 Error: The following Docker images are not available locally:
 
-- foghorn/ping-check:latest (required by: google-ping)
+- foghorn/ping-check:1.0.0 (required by: google-ping)
 - custom-check:v2.0 (required by: custom-service-check)
 
 Please pull the missing images:
-  docker pull foghorn/ping-check:latest
+  docker pull foghorn/ping-check:1.0.0
   docker pull custom-check:v2.0
 ```
 

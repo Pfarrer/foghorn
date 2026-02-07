@@ -4,7 +4,7 @@ version: "1.0"
 name: "echo-check"
 description: "Simple echo test"
 enabled: true
-image: "foghorn/echo-check:latest"
+image: "foghorn/echo-check:1.0.0"
 schedule:
   interval: "10s"
 
@@ -12,7 +12,7 @@ schedule:
 name: "http-health-check"
 description: "Checks health of example.com website"
 enabled: true
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "1m"
 env:

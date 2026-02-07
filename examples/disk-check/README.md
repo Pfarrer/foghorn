@@ -71,7 +71,7 @@ And set `MOUNT_POINT` with the `/host` prefix.
 
 ```bash
 cd examples/disk-check
-docker build -t foghorn/disk-check:latest .
+docker build -t foghorn/disk-check:1.0.0 .
 ```
 
 ## Example Configurations
@@ -80,7 +80,7 @@ docker build -t foghorn/disk-check:latest .
 
 ```yaml
 name: "root-disk-space"
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:
@@ -96,7 +96,7 @@ volumes:
 
 ```yaml
 name: "logs-disk-space"
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   interval: "5m"
 env:
@@ -115,7 +115,7 @@ volumes:
 
 ```yaml
 name: "data-disk-space"
-image: "foghorn/disk-check:latest"
+image: "foghorn/disk-check:1.0.0"
 schedule:
   cron: "0 * * * *"
 env:
@@ -134,7 +134,7 @@ volumes:
 docker run --rm \
   -v $PWD:/host:ro \
   -e MOUNT_POINT=/host \
-  foghorn/disk-check:latest
+  foghorn/disk-check:1.0.0
 
 # Check root filesystem
 docker run --rm \
@@ -142,5 +142,5 @@ docker run --rm \
   -e MOUNT_POINT=/host \
   -e WARNING_THRESHOLD_PERCENT=70 \
   -e CRITICAL_THRESHOLD_PERCENT=85 \
-  foghorn/disk-check:latest
+  foghorn/disk-check:1.0.0
 ```

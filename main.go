@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/executor"
+	"github.com/pfarrer/foghorn/imageresolver"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
 	"github.com/pfarrer/foghorn/tui"
@@ -162,13 +163,21 @@ func verifyImageAvailabilityFn(cfg *config.Config) error {
 	logger.Info("Validating Docker images...")
 
 	imageChecks := make(map[string][]string)
+	unresolvedChecks := make(map[string][]string)
+	unresolvedErrors := make(map[string]error)
 	enabledChecks := 0
 
 	for _, check := range cfg.Checks {
 		if check.Enabled {
 			enabledChecks++
 			if check.Image != "" {
-				imageChecks[check.Image] = append(imageChecks[check.Image], check.Name)
+				resolved, err := imageresolver.Resolve(context.Background(), cli, check.Image)
+				if err != nil {
+					unresolvedChecks[check.Image] = append(unresolvedChecks[check.Image], check.Name)
+					unresolvedErrors[check.Image] = err
+					continue
+				}
+				imageChecks[resolved] = append(imageChecks[resolved], check.Name)
 			}
 		}
 	}
@@ -193,15 +202,28 @@ func verifyImageAvailabilityFn(cfg *config.Config) error {
 		}
 	}
 
-	if len(missingImages) > 0 {
+	if len(unresolvedChecks) > 0 || len(missingImages) > 0 {
 		var builder strings.Builder
-		builder.WriteString("Error: The following Docker images are not available locally:\n\n")
-		for image, checkNames := range missingImages {
-			fmt.Fprintf(&builder, "- %s (required by: %s)\n", image, strings.Join(checkNames, ", "))
+		if len(unresolvedChecks) > 0 {
+			builder.WriteString("Error: The following image selectors could not be resolved locally:\n\n")
+			for image, checkNames := range unresolvedChecks {
+				if resolveErr, ok := unresolvedErrors[image]; ok {
+					fmt.Fprintf(&builder, "- %s (required by: %s, reason: %s)\n", image, strings.Join(checkNames, ", "), resolveErr.Error())
+				} else {
+					fmt.Fprintf(&builder, "- %s (required by: %s)\n", image, strings.Join(checkNames, ", "))
+				}
+			}
+			builder.WriteString("\n")
 		}
-		builder.WriteString("\nPlease pull the missing images:\n")
-		for image := range missingImages {
-			fmt.Fprintf(&builder, "  docker pull %s\n", image)
+		if len(missingImages) > 0 {
+			builder.WriteString("Error: The following Docker images are not available locally:\n\n")
+			for image, checkNames := range missingImages {
+				fmt.Fprintf(&builder, "- %s (required by: %s)\n", image, strings.Join(checkNames, ", "))
+			}
+			builder.WriteString("\nPlease pull the missing images:\n")
+			for image := range missingImages {
+				fmt.Fprintf(&builder, "  docker pull %s\n", image)
+			}
 		}
 		return fmt.Errorf("%s", builder.String())
 	}

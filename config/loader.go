@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pfarrer/foghorn/containerimage"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,6 +69,9 @@ func validate(cfg *Config) error {
 		}
 		if check.Image == "" {
 			return fmt.Errorf("check %s: image is required", check.Name)
+		}
+		if _, err := containerimage.ParseReference(check.Image); err != nil {
+			return fmt.Errorf("check %s: invalid image tag: %w", check.Name, err)
 		}
 		if check.Schedule.Cron == "" && check.Schedule.Interval == "" {
 			return fmt.Errorf("check %s: schedule (cron or interval) is required", check.Name)

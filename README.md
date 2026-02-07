@@ -130,6 +130,10 @@ Configuration includes:
 - Metadata and tags
 - Environment variables and timeouts
 
+### Container Image Versions
+
+Check containers must use semantic version tags. Supported selectors are `MAJOR`, `MAJOR.PATCH`, and full `MAJOR.MINOR.PATCH`. Partial selectors resolve to the highest matching local version.
+
 ### Global Settings
 
 - `version`: Configuration file version (optional)

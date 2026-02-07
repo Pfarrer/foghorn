@@ -7,7 +7,7 @@ integration
 Define a reusable Docker container that monitors system load average and CPU usage
 
 ## Usage Steps
-1. User pulls the standard system load check image: `foghorn/load-check:latest`
+1. User pulls the standard system load check image: `foghorn/load-check:1.0.0`
 2. Configure check with load thresholds and time intervals
 3. Foghorn runs the container on schedule
 4. Container reads load metrics and outputs results
@@ -80,7 +80,7 @@ Use Alpine Linux with `/proc/loadavg` parsing or Go for cross-platform
 ## Example Configuration
 ```yaml
 name: "system-load-check"
-image: "foghorn/load-check:latest"
+image: "foghorn/load-check:1.0.0"
 schedule:
   interval: "2m"
 env:
@@ -95,7 +95,7 @@ pid: "host"
 
 ```yaml
 name: "cpu-intensive-monitor"
-image: "foghorn/load-check:latest"
+image: "foghorn/load-check:1.0.0"
 schedule:
   cron: "*/5 * * * *"
 env:

@@ -3,9 +3,12 @@
 Runs an HTTP status check and returns Foghorn JSON output.
 
 ## Image
-`ghcr.io/pfarrer/foghorn-http-check:latest`
+`ghcr.io/pfarrer/foghorn-http-check:1.0.0`
+
+## Changelog
+- 1.0.0 Initial release
 
 ## Env
-- `FOGHORN_ENDPOINT` (or `URL`)
+- `CHECK_URL`
 - `EXPECTED_STATUS` (default `200`)
-- `FOGHORN_TIMEOUT` (default `10s`)
+- `REQUEST_TIMEOUT` (default `10s`)

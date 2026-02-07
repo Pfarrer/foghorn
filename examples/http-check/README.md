@@ -66,7 +66,7 @@ A Docker container that performs HTTP/HTTPS status checks on web endpoints as pa
 
 ```bash
 cd examples/http-check
-docker build -t foghorn/http-check:latest .
+docker build -t foghorn/http-check:1.0.0 .
 ```
 
 ## Example Configurations
@@ -75,7 +75,7 @@ docker build -t foghorn/http-check:latest .
 
 ```yaml
 name: "api-health-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "1m"
 env:
@@ -90,7 +90,7 @@ timeout: "30s"
 
 ```yaml
 name: "website-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   cron: "*/10 * * * *"
 env:
@@ -104,7 +104,7 @@ timeout: "15s"
 
 ```yaml
 name: "authenticated-api-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "5m"
 env:
@@ -121,7 +121,7 @@ timeout: "20s"
 
 ```yaml
 name: "api-post-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   cron: "0 * * * *"
 env:
@@ -139,7 +139,7 @@ timeout: "30s"
 
 ```yaml
 name: "fast-api-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "30s"
 env:
@@ -157,13 +157,13 @@ timeout: "10s"
 # Simple GET request
 docker run --rm \
   -e URL=https://httpbin.org/status/200 \
-  foghorn/http-check:latest
+  foghorn/http-check:1.0.0
 
 # With content validation
 docker run --rm \
   -e URL=https://example.com \
   -e CONTENT_REGEX=".*Example.*" \
-  foghorn/http-check:latest
+  foghorn/http-check:1.0.0
 
 # POST request with custom headers
 docker run --rm \
@@ -171,13 +171,13 @@ docker run --rm \
   -e METHOD=POST \
   -e REQUEST_BODY='{"test": true}' \
   -e HEADERS='{"Content-Type":"application/json"}' \
-  foghorn/http-check:latest
+  foghorn/http-check:1.0.0
 
 # With status code range
 docker run --rm \
   -e URL=https://httpbin.org/status/200 \
   -e EXPECTED_STATUS="200-299" \
-  foghorn/http-check:latest
+  foghorn/http-check:1.0.0
 ```
 
 ## Notes

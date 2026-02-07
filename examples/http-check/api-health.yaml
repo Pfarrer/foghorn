@@ -1,5 +1,5 @@
 name: "api-health-check"
-image: "foghorn/http-check:latest"
+image: "foghorn/http-check:1.0.0"
 schedule:
   interval: "1m"
 env:

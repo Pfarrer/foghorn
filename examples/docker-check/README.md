@@ -61,7 +61,7 @@ tags:
   - "network"
   - "health"
 enabled: true
-image: "foghorn/http-check-example:latest"
+image: "foghorn/http-check-example:1.0.0"
 schedule:
   cron: "*/5 * * * *"
 env:

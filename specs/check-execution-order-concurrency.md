@@ -20,7 +20,10 @@ Define execution concurrency limits and deterministic ordering for scheduled che
 - Cron-scheduled checks are not affected by the immediate-run rule.
 
 ## Acceptance Criteria
-- [ ] `max_concurrent_checks` limits concurrent check containers.
-- [ ] Due checks execute in priority order (longer interval first).
-- [ ] Interval checks run immediately on empty state.
-- [ ] Cron checks still wait for their scheduled time.
+- [x] `max_concurrent_checks` limits concurrent check containers.
+- [x] Due checks execute in priority order (longer interval first).
+- [x] Interval checks run immediately on empty state.
+- [x] Cron checks still wait for their scheduled time.
+
+## Passes
+true

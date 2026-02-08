@@ -3,6 +3,7 @@
 ## Done
 These specs have been implemented and all acceptance criteria pass.
 
+- [Check Execution Order and Concurrency](check-execution-order-concurrency.md)
 - [Basic CLI Arguments](basic-cli-arguments.md)
 - [Basic Scheduler with Cron Scheduling](basic-scheduler-cron.md)
 - [Concurrent Execution and Timeout Handling](concurrent-execution-timeout.md)

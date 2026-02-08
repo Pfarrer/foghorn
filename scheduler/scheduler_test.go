@@ -626,9 +626,147 @@ func TestIntervalBasedScheduling(t *testing.T) {
 	}
 
 	now := time.Now().In(time.UTC)
-	if checkStatus.NextRun.Before(now) || checkStatus.NextRun.After(now.Add(31*time.Second)) {
-		t.Errorf("Next run time should be approximately 30 seconds from now, got %v", checkStatus.NextRun)
+	if checkStatus.NextRun.Before(now.Add(-2*time.Second)) || checkStatus.NextRun.After(now.Add(2*time.Second)) {
+		t.Errorf("Next run time should be approximately now, got %v", checkStatus.NextRun)
 	}
+}
+
+type BlockingExecutor struct {
+	started chan string
+	blocker chan struct{}
+}
+
+func (b *BlockingExecutor) Execute(check CheckConfig) error {
+	b.started <- check.GetName()
+	<-b.blocker
+	return nil
+}
+
+func (b *BlockingExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+}
+
+func TestDueCheckPriorityOrder(t *testing.T) {
+	executor := &BlockingExecutor{
+		started: make(chan string, 2),
+		blocker: make(chan struct{}),
+	}
+	scheduler := NewScheduler(executor, time.UTC, 1)
+
+	longCheck := &IntervalMockCheckConfig{
+		name:     "long-interval",
+		schedule: "5m",
+		enabled:  true,
+		interval: "5m",
+	}
+	shortCheck := &IntervalMockCheckConfig{
+		name:     "short-interval",
+		schedule: "1m",
+		enabled:  true,
+		interval: "1m",
+	}
+
+	if err := scheduler.AddCheck(longCheck); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+	if err := scheduler.AddCheck(shortCheck); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	now := time.Now()
+	longStatus, _ := scheduler.GetCheckStatus(longCheck.name)
+	shortStatus, _ := scheduler.GetCheckStatus(shortCheck.name)
+	longStatus.NextRun = now
+	shortStatus.NextRun = now
+
+	scheduler.tick()
+
+	select {
+	case first := <-executor.started:
+		if first != longCheck.name {
+			t.Fatalf("Expected first check to be %s, got %s", longCheck.name, first)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for first check to start")
+	}
+
+	executor.blocker <- struct{}{}
+	time.Sleep(10 * time.Millisecond)
+
+	scheduler.tick()
+
+	select {
+	case second := <-executor.started:
+		if second != shortCheck.name {
+			t.Fatalf("Expected second check to be %s, got %s", shortCheck.name, second)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for second check to start")
+	}
+
+	executor.blocker <- struct{}{}
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestDueCheckPriorityTieBreakByName(t *testing.T) {
+	executor := &BlockingExecutor{
+		started: make(chan string, 2),
+		blocker: make(chan struct{}),
+	}
+	scheduler := NewScheduler(executor, time.UTC, 1)
+
+	firstCheck := &IntervalMockCheckConfig{
+		name:     "alpha",
+		schedule: "2m",
+		enabled:  true,
+		interval: "2m",
+	}
+	secondCheck := &IntervalMockCheckConfig{
+		name:     "beta",
+		schedule: "2m",
+		enabled:  true,
+		interval: "2m",
+	}
+
+	if err := scheduler.AddCheck(firstCheck); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+	if err := scheduler.AddCheck(secondCheck); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	now := time.Now()
+	firstStatus, _ := scheduler.GetCheckStatus(firstCheck.name)
+	secondStatus, _ := scheduler.GetCheckStatus(secondCheck.name)
+	firstStatus.NextRun = now
+	secondStatus.NextRun = now
+
+	scheduler.tick()
+
+	select {
+	case first := <-executor.started:
+		if first != firstCheck.name {
+			t.Fatalf("Expected first check to be %s, got %s", firstCheck.name, first)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for first check to start")
+	}
+
+	executor.blocker <- struct{}{}
+	time.Sleep(10 * time.Millisecond)
+
+	scheduler.tick()
+
+	select {
+	case second := <-executor.started:
+		if second != secondCheck.name {
+			t.Fatalf("Expected second check to be %s, got %s", secondCheck.name, second)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for second check to start")
+	}
+
+	executor.blocker <- struct{}{}
+	time.Sleep(10 * time.Millisecond)
 }
 
 func TestMixedCronAndIntervalScheduling(t *testing.T) {

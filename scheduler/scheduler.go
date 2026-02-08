@@ -37,6 +37,7 @@ type ScheduledCheck struct {
 	ScheduleType ScheduleType
 	Interval     time.Duration
 	IsQueued     bool
+	History      []CheckHistoryEntry
 }
 
 type Scheduler struct {
@@ -56,6 +57,13 @@ type Scheduler struct {
 type ResultLogger interface {
 	RecordResult(checkName string, status string, duration time.Duration, completedAt time.Time) error
 }
+
+type CheckHistoryEntry struct {
+	Status      string
+	CompletedAt time.Time
+}
+
+const maxHistoryEntries = 10
 
 func NewScheduler(executor CheckExecutor, location *time.Location, maxConcurrentChecks int) *Scheduler {
 	if location == nil {
@@ -156,14 +164,27 @@ func (s *Scheduler) tick() {
 
 	s.processQueue()
 
+	var due []struct {
+		name  string
+		check *ScheduledCheck
+	}
+
+	s.mu.RLock()
 	for name, check := range s.checks {
 		if !check.Config.IsEnabled() || check.Running {
 			continue
 		}
-
 		if now.After(check.NextRun) || now.Equal(check.NextRun) {
-			s.executeCheck(name, check)
+			due = append(due, struct {
+				name  string
+				check *ScheduledCheck
+			}{name: name, check: check})
 		}
+	}
+	s.mu.RUnlock()
+
+	for _, item := range due {
+		s.executeCheck(item.name, item.check)
 	}
 }
 
@@ -172,17 +193,27 @@ func (s *Scheduler) processQueue() {
 		return
 	}
 
-	for len(s.queue) > 0 && s.runningChecks < s.maxConcurrentChecks {
-		checkConfig := s.queue[0]
+	for {
+		var checkConfig CheckConfig
+		s.mu.Lock()
+		if len(s.queue) == 0 || s.runningChecks >= s.maxConcurrentChecks {
+			s.mu.Unlock()
+			break
+		}
+		checkConfig = s.queue[0]
 		s.queue = s.queue[1:]
+		s.mu.Unlock()
 
-		if check, exists := s.checks[checkConfig.GetName()]; exists {
+		if check, exists := s.GetCheckStatus(checkConfig.GetName()); exists {
 			logger.Info("Processing queued check: %s (running: %d, queued: %d)", checkConfig.GetName(), s.runningChecks, len(s.queue))
+			s.mu.Lock()
 			check.IsQueued = false
+			s.mu.Unlock()
 			s.executeCheck(checkConfig.GetName(), check)
 		}
 	}
 
+	s.mu.Lock()
 	for name, check := range s.checks {
 		isInQueue := false
 		for _, queuedCheck := range s.queue {
@@ -193,13 +224,16 @@ func (s *Scheduler) processQueue() {
 		}
 		check.IsQueued = isInQueue
 	}
+	s.mu.Unlock()
 }
 
 func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
+	s.mu.Lock()
 	if s.maxConcurrentChecks > 0 && s.runningChecks >= s.maxConcurrentChecks {
 		logger.Debug("Queuing check %s (concurrency limit reached: %d)", name, s.maxConcurrentChecks)
 		s.queue = append(s.queue, check.Config)
 		check.IsQueued = true
+		s.mu.Unlock()
 		return
 	}
 
@@ -208,12 +242,14 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 	s.runningChecks++
 	now := time.Now().In(s.location)
 	check.LastRun = &now
+	s.mu.Unlock()
 
 	logger.Info("Executing check: %s (next run: %v)", name, check.NextRun.Format(time.RFC3339))
 
 	startTime := time.Now()
 	go func() {
 		defer func() {
+			s.mu.Lock()
 			check.Running = false
 			s.runningChecks--
 			now := time.Now().In(s.location)
@@ -227,6 +263,7 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 				}
 			}
 			check.LastRun = &now
+			s.mu.Unlock()
 			logger.Debug("Check %s completed (next run: %v)", name, check.NextRun.Format(time.RFC3339))
 		}()
 
@@ -326,13 +363,17 @@ func (s *Scheduler) handleCheckResult(checkName string, status string, duration 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	completedAt := time.Now().In(s.location)
 	if check, exists := s.checks[checkName]; exists {
 		check.LastStatus = status
 		check.LastDuration = duration
+		check.History = trimHistory(append(check.History, CheckHistoryEntry{
+			Status:      status,
+			CompletedAt: completedAt,
+		}))
 	}
 
 	if s.resultLogger != nil {
-		completedAt := time.Now().In(s.location)
 		if err := s.resultLogger.RecordResult(checkName, status, duration, completedAt); err != nil {
 			logger.Error("Failed to persist state for %s: %v", checkName, err)
 		}
@@ -343,6 +384,7 @@ type CheckState struct {
 	LastStatus   string
 	LastDuration time.Duration
 	LastRun      time.Time
+	History      []CheckHistoryEntry
 }
 
 func (s *Scheduler) ApplyState(states map[string]CheckState) {
@@ -367,5 +409,20 @@ func (s *Scheduler) ApplyState(states map[string]CheckState) {
 				check.NextRun = lastRun.Add(check.Interval)
 			}
 		}
+		if len(state.History) > 0 {
+			check.History = trimHistory(state.History)
+		}
 	}
+}
+
+func trimHistory(entries []CheckHistoryEntry) []CheckHistoryEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	if len(entries) > maxHistoryEntries {
+		entries = entries[len(entries)-maxHistoryEntries:]
+	}
+	out := make([]CheckHistoryEntry, len(entries))
+	copy(out, entries)
+	return out
 }

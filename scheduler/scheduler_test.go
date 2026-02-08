@@ -248,6 +248,38 @@ func TestSchedulerAddCheckInvalidSchedule(t *testing.T) {
 	}
 }
 
+func TestSchedulerHistoryTrim(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	check := &MockCheckConfig{
+		name:     "history-check",
+		schedule: "*/5 * * * *",
+		enabled:  true,
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	for i := 0; i < maxHistoryEntries+5; i++ {
+		status := "pass"
+		if i%2 == 1 {
+			status = "fail"
+		}
+		scheduler.handleCheckResult(check.name, status, time.Second)
+	}
+
+	checkStatus, exists := scheduler.GetCheckStatus(check.name)
+	if !exists {
+		t.Fatalf("Check should exist after being added")
+	}
+
+	if len(checkStatus.History) != maxHistoryEntries {
+		t.Fatalf("History length = %d, want %d", len(checkStatus.History), maxHistoryEntries)
+	}
+}
+
 func TestSchedulerRemoveCheck(t *testing.T) {
 	executor := &MockExecutor{}
 	scheduler := NewScheduler(executor, time.UTC, 0)

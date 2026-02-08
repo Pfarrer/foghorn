@@ -125,6 +125,10 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	select {
 	case statusResult := <-statusCh:
 		if statusResult.StatusCode != 0 {
+			duration := time.Since(startTime)
+			if e.resultCallback != nil {
+				e.resultCallback(checkName, "error", duration)
+			}
 			logger.Error("Check %s: Failed with exit code %d", checkName, statusResult.StatusCode)
 			return fmt.Errorf("check failed with exit code %d", statusResult.StatusCode)
 		}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -132,6 +133,7 @@ func main() {
 		if err != nil {
 			logger.Warn("Failed to load state log: %v", err)
 		} else {
+			history := buildHistory(records, 10)
 			latest := state.LatestByCheck(records)
 			stateRecords = make(map[string]scheduler.CheckState, len(latest))
 			for name, record := range latest {
@@ -139,6 +141,15 @@ func main() {
 					LastStatus:   record.Status,
 					LastDuration: time.Duration(record.DurationMs) * time.Millisecond,
 					LastRun:      record.CompletedAt,
+					History:      history[name],
+				}
+			}
+			for name, entries := range history {
+				if _, ok := stateRecords[name]; ok {
+					continue
+				}
+				stateRecords[name] = scheduler.CheckState{
+					History: entries,
 				}
 			}
 		}
@@ -289,4 +300,33 @@ func verifyImageAvailabilityFn(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func buildHistory(records []state.Record, maxEntries int) map[string][]scheduler.CheckHistoryEntry {
+	if len(records) == 0 || maxEntries <= 0 {
+		return nil
+	}
+
+	history := make(map[string][]scheduler.CheckHistoryEntry)
+	for _, record := range records {
+		if record.CheckName == "" {
+			continue
+		}
+		history[record.CheckName] = append(history[record.CheckName], scheduler.CheckHistoryEntry{
+			Status:      record.Status,
+			CompletedAt: record.CompletedAt,
+		})
+	}
+
+	for name, entries := range history {
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].CompletedAt.Before(entries[j].CompletedAt)
+		})
+		if len(entries) > maxEntries {
+			entries = entries[len(entries)-maxEntries:]
+		}
+		history[name] = entries
+	}
+
+	return history
 }

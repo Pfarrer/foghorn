@@ -190,38 +190,18 @@ func (m model) renderCheckDivider(styles styles) string {
 }
 
 func (m model) formatCheckRow(name string, nameWidth int, check *scheduler.ScheduledCheck, now time.Time, styles styles) string {
-	var status string
-	if check == nil {
-		status = "Status"
-	} else if check.Running {
-		status = styles.colorRunning.Render("⟳")
-	} else if check.IsQueued {
-		status = styles.colorQueued.Render("⏳")
-	} else {
-		status = styles.colorIdle.Render("•")
-	}
-
 	var result string
 	if check == nil {
-		result = "Last"
+		result = "Last Status"
 	} else {
-		switch check.LastStatus {
-		case "pass":
-			result = styles.colorPass.Render("✓")
-		case "fail":
-			result = styles.colorFail.Render("✗")
-		case "warn":
-			result = styles.colorWarn.Render("⚠")
-		default:
-			result = styles.colorUnknown.Render("?")
-		}
+		result = statusSymbol(check.LastStatus, styles)
 	}
 
 	var lastRun string
 	if check == nil {
 		lastRun = "Last Run"
 	} else if check.LastRun != nil {
-		lastRun = formatRelativeTime(now.Sub(*check.LastRun))
+		lastRun = formatAbsoluteTime(*check.LastRun)
 	} else {
 		lastRun = "never"
 	}
@@ -235,20 +215,27 @@ func (m model) formatCheckRow(name string, nameWidth int, check *scheduler.Sched
 		nextRun = "due"
 	}
 
-	statusWidth := 6
-	resultWidth := 5
-	lastWidth := 12
+	var history string
+	if check == nil {
+		history = "Status History"
+	} else {
+		history = formatHistorySymbols(check.History, 10, styles)
+	}
+
+	resultWidth := 11
+	lastWidth := 16
 	nextWidth := 12
+	historyWidth := 14
 	availableWidth := styles.width - 2
 
 	nameCell := padRight(truncate(name, nameWidth), nameWidth)
-	statusCell := padRight(status, statusWidth)
 	resultCell := padRight(result, resultWidth)
-	lastCell := padRight(lastRun, lastWidth)
-	nextCell := padRight(nextRun, nextWidth)
+	lastCell := padRight(truncate(lastRun, lastWidth), lastWidth)
+	nextCell := padRight(truncate(nextRun, nextWidth), nextWidth)
+	historyCell := padRight(history, historyWidth)
 
 	row := fmt.Sprintf("%s  %s  %s  %s  %s",
-		nameCell, statusCell, resultCell, lastCell, nextCell)
+		nameCell, resultCell, lastCell, nextCell, historyCell)
 	return padRight(row, availableWidth)
 }
 
@@ -274,6 +261,39 @@ func formatRelativeTime(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
+func formatAbsoluteTime(t time.Time) string {
+	return t.In(time.Local).Format("2006-01-02 15:04")
+}
+
+func statusSymbol(status string, styles styles) string {
+	switch status {
+	case "pass":
+		return styles.colorPass.Render("✓")
+	case "fail":
+		return styles.colorFail.Render("✗")
+	case "warn":
+		return styles.colorWarn.Render("⚠")
+	case "error":
+		return styles.colorFail.Render("✗")
+	default:
+		return styles.colorUnknown.Render("?")
+	}
+}
+
+func formatHistorySymbols(entries []scheduler.CheckHistoryEntry, maxEntries int, styles styles) string {
+	if len(entries) == 0 || maxEntries <= 0 {
+		return "-"
+	}
+	if len(entries) > maxEntries {
+		entries = entries[len(entries)-maxEntries:]
+	}
+	var builder strings.Builder
+	for _, entry := range entries {
+		builder.WriteString(statusSymbol(entry.Status, styles))
+	}
+	return builder.String()
+}
+
 func truncate(s string, maxLen int) string {
 	if runewidth.StringWidth(s) <= maxLen {
 		return s
@@ -296,14 +316,14 @@ func padRight(s string, width int) string {
 }
 
 func (m model) calculateNameWidth(names []string, availableWidth int) int {
-	statusWidth := 6
-	resultWidth := 5
-	lastWidth := 12
+	resultWidth := 11
+	lastWidth := 16
 	nextWidth := 12
+	historyWidth := 14
 	minNameWidth := 10
 	maxNameWidth := 32
 
-	reserved := statusWidth + resultWidth + lastWidth + nextWidth + 8
+	reserved := resultWidth + lastWidth + nextWidth + historyWidth + 8
 	nameWidth := availableWidth - reserved
 	if nameWidth < minNameWidth {
 		nameWidth = minNameWidth

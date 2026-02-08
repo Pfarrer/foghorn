@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -106,7 +107,7 @@ func (s *Scheduler) AddCheck(config CheckConfig) error {
 		if err != nil {
 			return fmt.Errorf("check %s: failed to parse interval: %w", config.GetName(), err)
 		}
-		nextRun = time.Now().In(s.location).Add(interval)
+		nextRun = time.Now().In(s.location)
 	} else {
 		scheduleType = ScheduleTypeCron
 		nextRun, err = s.calculateNextRun(config.GetSchedule())
@@ -183,6 +184,17 @@ func (s *Scheduler) tick() {
 	}
 	s.mu.RUnlock()
 
+	if len(due) > 1 {
+		sort.Slice(due, func(i, j int) bool {
+			pi := s.priorityDuration(due[i].check, now)
+			pj := s.priorityDuration(due[j].check, now)
+			if pi == pj {
+				return due[i].name < due[j].name
+			}
+			return pi > pj
+		})
+	}
+
 	for _, item := range due {
 		s.executeCheck(item.name, item.check)
 	}
@@ -200,6 +212,7 @@ func (s *Scheduler) processQueue() {
 			s.mu.Unlock()
 			break
 		}
+		s.sortQueueLocked(time.Now().In(s.location))
 		checkConfig = s.queue[0]
 		s.queue = s.queue[1:]
 		s.mu.Unlock()
@@ -232,6 +245,7 @@ func (s *Scheduler) executeCheck(name string, check *ScheduledCheck) {
 	if s.maxConcurrentChecks > 0 && s.runningChecks >= s.maxConcurrentChecks {
 		logger.Debug("Queuing check %s (concurrency limit reached: %d)", name, s.maxConcurrentChecks)
 		s.queue = append(s.queue, check.Config)
+		s.sortQueueLocked(time.Now().In(s.location))
 		check.IsQueued = true
 		s.mu.Unlock()
 		return
@@ -281,6 +295,40 @@ func (s *Scheduler) calculateNextRun(cronExpr string) (time.Time, error) {
 
 	now := time.Now().In(s.location)
 	return parsed.Next(now), nil
+}
+
+func (s *Scheduler) priorityDuration(check *ScheduledCheck, now time.Time) time.Duration {
+	if check == nil {
+		return 0
+	}
+	if check.ScheduleType == ScheduleTypeInterval && check.Interval > 0 {
+		return check.Interval
+	}
+	if check.ScheduleType == ScheduleTypeCron {
+		if next, err := s.calculateNextRun(check.Config.GetSchedule()); err == nil {
+			return next.Sub(now)
+		}
+	}
+	if !check.NextRun.IsZero() {
+		return check.NextRun.Sub(now)
+	}
+	return 0
+}
+
+func (s *Scheduler) sortQueueLocked(now time.Time) {
+	if len(s.queue) < 2 {
+		return
+	}
+	sort.Slice(s.queue, func(i, j int) bool {
+		ci := s.checks[s.queue[i].GetName()]
+		cj := s.checks[s.queue[j].GetName()]
+		pi := s.priorityDuration(ci, now)
+		pj := s.priorityDuration(cj, now)
+		if pi == pj {
+			return s.queue[i].GetName() < s.queue[j].GetName()
+		}
+		return pi > pj
+	})
 }
 
 func parseInterval(interval string) (time.Duration, error) {

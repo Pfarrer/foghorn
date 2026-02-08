@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/pfarrer/foghorn/scheduler"
 )
@@ -217,7 +218,7 @@ func (m model) formatCheckRow(name string, nameWidth int, check *scheduler.Sched
 
 	var history string
 	if check == nil {
-		history = "Status History"
+		history = "State Since"
 	} else {
 		history = formatHistorySymbols(check.History, 10, styles)
 	}
@@ -225,14 +226,14 @@ func (m model) formatCheckRow(name string, nameWidth int, check *scheduler.Sched
 	resultWidth := 11
 	lastWidth := 16
 	nextWidth := 12
-	historyWidth := 14
+	historyWidth := 24
 	availableWidth := styles.width - 2
 
 	nameCell := padRight(truncate(name, nameWidth), nameWidth)
 	resultCell := padRight(result, resultWidth)
 	lastCell := padRight(truncate(lastRun, lastWidth), lastWidth)
 	nextCell := padRight(truncate(nextRun, nextWidth), nextWidth)
-	historyCell := padRight(history, historyWidth)
+	historyCell := padRight(truncate(history, historyWidth), historyWidth)
 
 	row := fmt.Sprintf("%s  %s  %s  %s  %s",
 		nameCell, resultCell, lastCell, nextCell, historyCell)
@@ -287,21 +288,25 @@ func formatHistorySymbols(entries []scheduler.CheckHistoryEntry, maxEntries int,
 	if len(entries) > maxEntries {
 		entries = entries[len(entries)-maxEntries:]
 	}
-	var builder strings.Builder
-	for _, entry := range entries {
-		builder.WriteString(statusSymbol(entry.Status, styles))
+	current := entries[len(entries)-1].Status
+	since := entries[len(entries)-1].CompletedAt
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].Status != current {
+			break
+		}
+		since = entries[i].CompletedAt
 	}
-	return builder.String()
+	return fmt.Sprintf("%s since %s", statusSymbol(current, styles), formatAbsoluteTime(since))
 }
 
 func truncate(s string, maxLen int) string {
-	if runewidth.StringWidth(s) <= maxLen {
+	if ansi.StringWidth(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return runewidth.Truncate(s, maxLen, "")
+		return ansi.Truncate(s, maxLen, "")
 	}
-	return runewidth.Truncate(s, maxLen, "...")
+	return ansi.Truncate(s, maxLen, "...")
 }
 
 func padRight(s string, width int) string {
@@ -319,7 +324,7 @@ func (m model) calculateNameWidth(names []string, availableWidth int) int {
 	resultWidth := 11
 	lastWidth := 16
 	nextWidth := 12
-	historyWidth := 14
+	historyWidth := 24
 	minNameWidth := 10
 	maxNameWidth := 32
 

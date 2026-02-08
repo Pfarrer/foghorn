@@ -38,8 +38,8 @@ func TestCheckHeaderColumns(t *testing.T) {
 	if !strings.Contains(header, "Last Status") {
 		t.Fatalf("header missing Last Status column: %q", header)
 	}
-	if !strings.Contains(header, "Status History") {
-		t.Fatalf("header missing Status History column: %q", header)
+	if !strings.Contains(header, "State Since") {
+		t.Fatalf("header missing State Since column: %q", header)
 	}
 }
 
@@ -53,5 +53,8 @@ func TestHistorySymbolsRender(t *testing.T) {
 	history := formatHistorySymbols(entries, 10, styles)
 	if history == "-" {
 		t.Fatalf("history should render symbols, got %q", history)
+	}
+	if !strings.Contains(history, "since") {
+		t.Fatalf("history should include since timestamp, got %q", history)
 	}
 }

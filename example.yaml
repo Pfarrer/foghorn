@@ -1,93 +1,14 @@
 version: "1.0"
-max_concurrent_checks: 5
 state_log_period: "24h"
 
 ---
-name: "disk-space-check"
-description: "Monitors disk space usage on the server"
-tags:
-  - "infrastructure"
-  - "storage"
+name: "http-health-check"
+description: "Checks health of example.com website"
 enabled: true
-image: "foghorn/disk-check:1"
-schedule:
-  cron: "*/5 * * * *"
-evaluation:
-  - type: "threshold"
-    condition: "less_than"
-    threshold: 80.0
-env:
-  MOUNT_POINT: "/var/log"
-  ALERT_THRESHOLD: "90%"
-timeout: "30s"
-metadata:
-  priority: "high"
-  owner: "ops-team"
-
----
-name: "api-health-check"
-description: "Checks health of main API endpoint"
-tags:
-  - "api"
-  - "health"
-enabled: true
-image: "foghorn/http-check:1.0"
+image: "ghcr.io/pfarrer/foghorn-http-check:1"
 schedule:
   interval: "1m"
-evaluation:
-  - type: "expected_value"
-    expected: 200
 env:
-  ENDPOINT: "https://api.example.com/health"
-  METHOD: "GET"
-timeout: "10s"
-metadata:
-  priority: "critical"
-  owner: "backend-team"
-
----
-name: "database-connection-pool"
-description: "Monitors database connection pool usage"
-tags:
-  - "database"
-  - "performance"
-enabled: true
-image: "foghorn/postgres-check:1.2.3"
-schedule:
-  cron: "0,15,30,45 * * * *"
-evaluation:
-  - type: "threshold"
-    condition: "less_than"
-    threshold: 75.0
-  - type: "expected_value"
-    expected: "healthy"
-env:
-  DB_HOST: "${DB_HOST}"
-  DB_PORT: "5432"
-  DB_NAME: "production"
-timeout: "15s"
-metadata:
-  priority: "high"
-  owner: "database-team"
-
----
-name: "memory-usage-monitor"
-description: "Tracks system memory usage"
-tags:
-  - "infrastructure"
-  - "performance"
-enabled: false
-image: "foghorn/memory-check:2"
-schedule:
-  interval: "30s"
-evaluation:
-  - type: "threshold"
-    condition: "less_than"
-    threshold: 90.0
-env:
-  ALERT_THRESHOLD: "95%"
-timeout: "10s"
-metadata:
-  priority: "medium"
-  owner: "ops-team"
-  notes: "Disabled in staging environments"
+  CHECK_URL: "https://example.com"
+  EXPECTED_STATUS: "200"
+  REQUEST_TIMEOUT: "10s"

@@ -8,6 +8,10 @@ enabled: true
 image: "ghcr.io/pfarrer/foghorn-http-check:1"
 schedule:
   interval: "1m"
+evaluation:
+  - type: "json"
+    condition: "status == 'healthy'"
+    expected: true
 env:
   CHECK_URL: "https://example.com"
   EXPECTED_STATUS: "200"

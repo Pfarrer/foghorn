@@ -8,7 +8,12 @@ URL="${CHECK_URL:-https://example.com}"
 EXPECTED_STATUS="${EXPECTED_STATUS:-200}"
 TIMEOUT="${REQUEST_TIMEOUT:-10s}"
 
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$URL" 2>&1 || echo "000")
+HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$URL" 2>/dev/null || true)
+case "$HTTP_CODE" in
+    ''|*[!0-9]*)
+        HTTP_CODE="000"
+        ;;
+esac
 
 END_TIME=$(date +%s%3N)
 DURATION=$((END_TIME - START_TIME))
@@ -27,7 +32,7 @@ cat <<RESULT
   "message": "$MESSAGE",
   "data": {
     "url": "$URL",
-    "http_code": $HTTP_CODE,
+    "http_code": "$HTTP_CODE",
     "expected_status": "$EXPECTED_STATUS"
   },
   "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",

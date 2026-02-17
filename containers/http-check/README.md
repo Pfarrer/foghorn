@@ -3,9 +3,10 @@
 Runs an HTTP status check and returns Foghorn JSON output.
 
 ## Image
-`ghcr.io/pfarrer/foghorn-http-check:1.0.0`
+`ghcr.io/pfarrer/foghorn-http-check:1.0.1`
 
 ## Changelog
+- 1.0.1 Fix JSON output when curl request fails
 - 1.0.0 Initial release
 
 ## Env

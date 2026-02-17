@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/imageresolver"
@@ -82,6 +83,14 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 			e.resultCallback(checkName, "error", duration)
 		}
 		logger.Error("Check %s: Failed to resolve image: %v", checkName, err)
+		return err
+	}
+	if err := e.ensureImageAvailable(ctx, image, checkName); err != nil {
+		duration := time.Since(startTime)
+		if e.resultCallback != nil {
+			e.resultCallback(checkName, "error", duration)
+		}
+		logger.Error("Check %s: Failed to prepare image: %v", checkName, err)
 		return err
 	}
 
@@ -296,4 +305,31 @@ func (e *DockerExecutor) resolveImage(ctx context.Context, image string) (string
 	e.resolveMu.Unlock()
 
 	return resolved, nil
+}
+
+func (e *DockerExecutor) ensureImageAvailable(ctx context.Context, imageRef string, checkName string) error {
+	_, _, err := e.cli.ImageInspectWithRaw(ctx, imageRef)
+	if err == nil {
+		return nil
+	}
+	if !client.IsErrNotFound(err) {
+		return fmt.Errorf("failed to inspect image %s: %w", imageRef, err)
+	}
+
+	logger.Info("Check %s: Pulling image %s", checkName, imageRef)
+
+	pullCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	reader, err := e.cli.ImagePull(pullCtx, imageRef, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to pull image %s: %w", imageRef, err)
+	}
+	defer reader.Close()
+
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return fmt.Errorf("failed to complete pull for image %s: %w", imageRef, err)
+	}
+
+	return nil
 }

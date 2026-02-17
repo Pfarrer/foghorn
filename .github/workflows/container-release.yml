@@ -68,11 +68,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read semantic version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_file="containers/${{ matrix.container }}/VERSION"
+          if [ ! -f "$version_file" ]; then
+            echo "Missing VERSION file: $version_file" >&2
+            exit 1
+          fi
+
+          version="$(tr -d '[:space:]' < "$version_file")"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid semantic version in $version_file: $version" >&2
+            exit 1
+          fi
+
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: containers/${{ matrix.container }}
           push: true
           tags: |
-            ghcr.io/pfarrer/foghorn-${{ matrix.container }}:${{ github.sha }}
+            ghcr.io/pfarrer/foghorn-${{ matrix.container }}:${{ steps.version.outputs.value }}
             ghcr.io/pfarrer/foghorn-${{ matrix.container }}:latest

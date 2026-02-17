@@ -3,8 +3,6 @@ package imageresolver
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/pfarrer/foghorn/containerimage"
@@ -14,7 +12,15 @@ type ImageLister interface {
 	ImageList(ctx context.Context, options image.ListOptions) ([]image.Summary, error)
 }
 
+type TagLister interface {
+	ListTags(ctx context.Context, repository string) ([]string, error)
+}
+
 func Resolve(ctx context.Context, lister ImageLister, image string) (string, error) {
+	return resolveWithTagLister(ctx, lister, image, newRegistryTagLister())
+}
+
+func resolveWithTagLister(ctx context.Context, _ ImageLister, image string, tags TagLister) (string, error) {
 	ref, err := containerimage.ParseReference(image)
 	if err != nil {
 		return "", err
@@ -24,44 +30,33 @@ func Resolve(ctx context.Context, lister ImageLister, image string) (string, err
 		return image, nil
 	}
 
-	versions, err := availableVersions(ctx, lister, ref.Repository)
+	versions, err := availableVersions(ctx, tags, ref.Repository)
 	if err != nil {
 		return "", err
 	}
 
 	resolved, ok := containerimage.ResolveSelector(ref.Selector, versions)
 	if !ok {
-		return "", fmt.Errorf("no local versions match selector %q for %s", ref.Tag, ref.Repository)
+		return "", fmt.Errorf("no registry versions match selector %q for %s", ref.Tag, ref.Repository)
 	}
 
 	return fmt.Sprintf("%s:%s", ref.Repository, resolved.String()), nil
 }
 
-func availableVersions(ctx context.Context, lister ImageLister, repo string) ([]containerimage.Version, error) {
-	images, err := lister.ImageList(ctx, image.ListOptions{})
+func availableVersions(ctx context.Context, tags TagLister, repo string) ([]containerimage.Version, error) {
+	allTags, err := tags.ListTags(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list local images: %w", err)
+		return nil, fmt.Errorf("failed to list registry tags: %w", err)
 	}
 
 	versions := make([]containerimage.Version, 0)
-	for _, image := range images {
-		for _, tag := range image.RepoTags {
-			repoTag := tag
-			if !strings.HasPrefix(repoTag, repo+":") {
-				continue
-			}
-			versionTag := strings.TrimPrefix(repoTag, repo+":")
-			version, err := containerimage.ParseVersion(versionTag)
-			if err != nil {
-				continue
-			}
-			versions = append(versions, version)
+	for _, tag := range allTags {
+		version, err := containerimage.ParseVersion(tag)
+		if err != nil {
+			continue
 		}
+		versions = append(versions, version)
 	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].Compare(versions[j]) > 0
-	})
 
 	return versions, nil
 }

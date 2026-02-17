@@ -11,7 +11,7 @@ Extend the GitHub Actions workflow to build and publish a multi-architecture Doc
 2. GitHub Actions triggers the workflow
 3. Workflow builds multi-architecture Docker image (amd64, arm64, arm/v7)
 4. Image is pushed to GitHub Container Registry
-5. Image is tagged with Git commit SHA and 'latest' tag
+5. Image is tagged according to release versioning policy
 6. Pull and run image using docker compose example
 
 ## Implementation Notes
@@ -21,7 +21,7 @@ Extend the GitHub Actions workflow to build and publish a multi-architecture Doc
 - Configure platforms: linux/amd64, linux/arm64, linux/arm/v7
 - Authenticate with GitHub Container Registry using GITHUB_TOKEN
 - Push images to ghcr.io/pfarrer/foghorn
-- Tag images with Git SHA and 'latest' tag
+- Tag images according to release versioning policy
 - Use docker/metadata-action to generate tags and labels
 - Set proper Dockerfile context and build args
 - Ensure image uses non-root user if applicable
@@ -33,9 +33,7 @@ Extend the GitHub Actions workflow to build and publish a multi-architecture Doc
 - [x] Docker job runs after tests pass
 - [x] Image builds successfully for all three platforms
 - [x] Image is pushed to GitHub Container Registry
-- [x] Image is tagged with Git commit SHA
-- [x] Image is tagged with 'latest' tag
-- [x] Image is accessible via docker pull ghcr.io/pfarrer/foghorn:latest
+- [x] Image tags follow the release versioning policy
 - [x] Build logs show multi-platform build progress
 - [x] Workflow fails if Docker build or push fails
 - [x] Example docker-compose.yml is provided demonstrating general usage

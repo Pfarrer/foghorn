@@ -3,7 +3,7 @@
 Runs an HTTP status check and returns Foghorn JSON output.
 
 ## Image
-`ghcr.io/pfarrer/foghorn-http-check:latest`
+`ghcr.io/pfarrer/foghorn-http-check:1.0.0`
 
 ## Changelog
 - 1.0.0 Initial release

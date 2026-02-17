@@ -271,7 +271,7 @@ func verifyImageAvailabilityFn(cfg *config.Config) error {
 	if len(unresolvedChecks) > 0 || len(missingImages) > 0 {
 		var builder strings.Builder
 		if len(unresolvedChecks) > 0 {
-			builder.WriteString("Error: The following image selectors could not be resolved locally:\n\n")
+			builder.WriteString("Error: The following image selectors could not be resolved from registry tags:\n\n")
 			for image, checkNames := range unresolvedChecks {
 				if resolveErr, ok := unresolvedErrors[image]; ok {
 					fmt.Fprintf(&builder, "- %s (required by: %s, reason: %s)\n", image, strings.Join(checkNames, ", "), resolveErr.Error())

@@ -10,12 +10,12 @@ schedule:
   interval: "1m"
 evaluation:
   - type: "json"
-    condition: "status == 'healthy'"
+    condition: "status == 'pass'"
     expected: true
 env:
   CHECK_URL: "https://example.com"
   EXPECTED_STATUS: "200"
-  REQUEST_TIMEOUT: "10s"
+  REQUEST_TIMEOUT: "10"
 
 ---
 name: "disk-space-check"

@@ -154,7 +154,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		if e.resultCallback != nil {
 			e.resultCallback(checkName, result.Status, duration)
 		}
-		logger.Info("Check %s: Completed with status %s (duration: %dms)", checkName, result.Status, result.DurationMs)
+		logger.Info("Check %s: Completed with status %s (duration: %dms) - %s", checkName, result.Status, result.DurationMs, result.Message)
 		return nil
 	case err := <-errCh:
 		duration := time.Since(startTime)

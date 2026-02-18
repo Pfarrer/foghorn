@@ -25,6 +25,7 @@ Container should accept these environment variables:
 - `TIMEOUT_SECONDS`: Request timeout (default: 30)
 - `FOLLOW_REDIRECTS`: Whether to follow HTTP redirects (default: true)
 - `VERIFY_SSL`: Whether to verify SSL certificates (default: true)
+  - When `false`, the check must skip TLS certificate verification (insecure mode)
 - `WARNING_THRESHOLD_MS`: Response time threshold for "warn" status (default: 1000ms)
 - `CRITICAL_THRESHOLD_MS`: Response time threshold for "fail" status (default: 5000ms)
 - `CONTENT_REGEX`: Optional regex pattern to validate response body
@@ -63,6 +64,7 @@ Use Alpine Linux with `curl` or Go-based implementation for better control
 - [ ] Measures and reports response time
 - [ ] Supports optional content validation with regex
 - [ ] Respects SSL verification setting
+- [ ] Provides a flag/env var to ignore SSL verification for HTTPS checks
 - [ ] Follows redirects by default with option to disable
 - [ ] Returns appropriate status based on thresholds and response code
 - [ ] Includes response size in data object

@@ -1,6 +1,7 @@
 FROM alpine:latest
 
-RUN apk add --no-cache curl ca-certificates
+RUN apk add --no-cache curl ca-certificates \
+    && update-ca-certificates
 
 COPY check.sh /check.sh
 RUN chmod +x /check.sh

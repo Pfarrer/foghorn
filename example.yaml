@@ -16,3 +16,20 @@ env:
   CHECK_URL: "https://example.com"
   EXPECTED_STATUS: "200"
   REQUEST_TIMEOUT: "10s"
+
+---
+name: "disk-space-check"
+description: "Checks root filesystem disk usage"
+enabled: true
+image: "ghcr.io/pfarrer/foghorn-disk-check:1"
+schedule:
+  interval: "5m"
+evaluation:
+  - type: "json"
+    condition: "status == 'pass'"
+    expected: true
+env:
+  MOUNT_POINT: "/"
+  WARNING_THRESHOLD_PERCENT: "80"
+  CRITICAL_THRESHOLD_PERCENT: "90"
+  CHECK_INODES: "true"

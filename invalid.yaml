@@ -1,5 +1,0 @@
-this is not valid yaml:
-  - missing
-  colons
-    and
-  broken indentation

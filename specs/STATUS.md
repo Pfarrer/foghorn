@@ -33,6 +33,7 @@ These specs are ready to be implemented but have not yet been started.
 - [Standard Port Check](standard-port-check.md)
 - [Standard System Load Check](standard-system-load-check.md)
 - [Standard Ping Check](standard-ping-check.md)
+- [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
 
 ## Blocked
 No specs are currently blocked.

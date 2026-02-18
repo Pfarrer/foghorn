@@ -1,1 +1,0 @@
-opencode run "Read the markdown files, then the specs in the spec folder. Pick any spec that is not yet implemented and has the highest priority in your opinion and is not blocked. This must not be the first spec. Implement the spec. Implement and focus on one spec only. When done, update the spec and docs. Commit the changed, but do not push"

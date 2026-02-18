@@ -126,34 +126,32 @@ func TestValidateRequiredFields(t *testing.T) {
 }
 
 func TestHelpfulErrorMessages(t *testing.T) {
-	tests := []struct {
-		name     string
-		yamlPath string
-		wantErr  bool
-	}{
-		{
-			name:     "non-existent file",
-			yamlPath: "../non-existent.yaml",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid YAML",
-			yamlPath: "../invalid.yaml",
-			wantErr:  true,
-		},
-	}
+	t.Run("non-existent file", func(t *testing.T) {
+		_, err := Load("../non-existent.yaml")
+		if err == nil {
+			t.Fatal("Load() should fail for non-existent file")
+		}
+		if err.Error() == "" {
+			t.Error("Error should not be empty")
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Load(tt.yamlPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err != nil && err.Error() == "" {
-				t.Error("Error should not be empty")
-			}
-		})
-	}
+	t.Run("invalid YAML", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		invalidPath := tmpDir + "/invalid.yaml"
+		invalidContent := "this is not valid yaml:\n  - missing\n  colons\n    and\n  broken indentation\n"
+		if writeErr := os.WriteFile(invalidPath, []byte(invalidContent), 0o644); writeErr != nil {
+			t.Fatalf("failed to write invalid test YAML: %v", writeErr)
+		}
+
+		_, err := Load(invalidPath)
+		if err == nil {
+			t.Fatal("Load() should fail for invalid YAML")
+		}
+		if err.Error() == "" {
+			t.Error("Error should not be empty")
+		}
+	})
 }
 
 func TestPrintSummary(t *testing.T) {

@@ -3,9 +3,10 @@
 Runs an HTTP status check and returns Foghorn JSON output.
 
 ## Image
-`ghcr.io/pfarrer/foghorn-http-check:1.0.4`
+`ghcr.io/pfarrer/foghorn-http-check:1.0.5`
 
 ## Changelog
+- 1.0.5 Switch base image to Debian slim for broader CA trust compatibility
 - 1.0.4 Refresh CA bundle during image build for better TLS chain trust
 - 1.0.3 Add `VERIFY_SSL` to allow insecure HTTPS checks when needed
 - 1.0.2 Add `ca-certificates` to support TLS certificate verification

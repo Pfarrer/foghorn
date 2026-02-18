@@ -34,6 +34,7 @@ These specs are ready to be implemented but have not yet been started.
 - [Standard System Load Check](standard-system-load-check.md)
 - [Standard Ping Check](standard-ping-check.md)
 - [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
+- [One-Shot Mode](one-shot-mode.md)
 
 ## Blocked
 No specs are currently blocked.

@@ -18,6 +18,21 @@ env:
   REQUEST_TIMEOUT: "10"
 
 ---
+name: "openssl-health-check"
+description: "Checks validity of example.com TLS certificate"
+enabled: true
+image: "ghcr.io/pfarrer/foghorn-openssl-check:1"
+schedule:
+  interval: "1h"
+evaluation:
+  - type: "json"
+    condition: "status == 'pass'"
+    expected: true
+env:
+  HOST: "example.com"
+  PORT: 443
+
+---
 name: "disk-space-check"
 description: "Checks root filesystem disk usage"
 enabled: true

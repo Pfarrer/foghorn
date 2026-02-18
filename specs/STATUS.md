@@ -22,6 +22,7 @@ These specs have been implemented and all acceptance criteria pass.
 - [Versioned Check Container Releases](versioned-check-container-releases.md)
 - [Check State Log File](check-state-log-file.md)
 - [State File Locking](state-file-locking.md)
+- [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
@@ -33,7 +34,6 @@ These specs are ready to be implemented but have not yet been started.
 - [Standard Port Check](standard-port-check.md)
 - [Standard System Load Check](standard-system-load-check.md)
 - [Standard Ping Check](standard-ping-check.md)
-- [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
 - [One-Shot Mode](one-shot-mode.md)
 
 ## Blocked

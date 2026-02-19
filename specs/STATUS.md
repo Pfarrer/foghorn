@@ -27,6 +27,7 @@ These specs have been implemented and all acceptance criteria pass.
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
+- [Daemon and Client Modularization](daemon-client-modularization.md)
 - [Auto-Update Check Containers](auto-update-check-containers.md)
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)

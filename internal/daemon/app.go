@@ -1,4 +1,4 @@
-package main
+package daemon
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/pfarrer/foghorn/tui"
 )
 
-func main() {
+func Run() {
 	var (
 		help                    bool
 		configPath              string

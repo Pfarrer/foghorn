@@ -23,11 +23,11 @@ These specs have been implemented and all acceptance criteria pass.
 - [Check State Log File](check-state-log-file.md)
 - [State File Locking](state-file-locking.md)
 - [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
+- [Daemon and Client Modularization](daemon-client-modularization.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
 
-- [Daemon and Client Modularization](daemon-client-modularization.md)
 - [Auto-Update Check Containers](auto-update-check-containers.md)
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)

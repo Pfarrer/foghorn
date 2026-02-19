@@ -25,13 +25,15 @@ Split Foghorn into a daemon core and separately runnable client modules. Move ru
 - Update docs and examples to show separate daemon and TUI startup commands.
 
 ## Acceptance Criteria
-- [ ] Repository root no longer contains tool runtime source files like `main.go`.
-- [ ] Daemon starts from `cmd/foghorn-daemon` and runs checks on schedule.
-- [ ] TUI starts from `cmd/foghorn-tui` and reads live state from daemon API.
-- [ ] Daemon and TUI can be started/stopped independently.
-- [ ] Shared logic is in `internal/` packages with clear package boundaries.
-- [ ] Existing behavior for scheduling and check execution remains correct after refactor.
-- [ ] Build/test/release automation supports multiple binaries.
-- [ ] Daemon exposes a local status API boundary for clients (Unix socket or loopback TCP).
-- [ ] Standalone TUI client connects to daemon API and no longer depends on in-process scheduler access.
-- [ ] Legacy in-process `--tui` mode is removed after standalone client is stable.
+- [x] Repository root no longer contains tool runtime source files like `main.go`.
+- [x] Daemon starts from `cmd/foghorn-daemon` and runs checks on schedule.
+- [x] TUI starts from `cmd/foghorn-tui` and reads live state from daemon API.
+- [x] Daemon and TUI can be started/stopped independently.
+- [x] Shared logic is in `internal/` packages with clear package boundaries.
+- [x] Existing behavior for scheduling and check execution remains correct after refactor.
+- [x] Build/test/release automation supports multiple binaries.
+- [x] Daemon exposes a local status API boundary for clients (Unix socket or loopback TCP).
+- [x] Standalone TUI client connects to daemon API and no longer depends on in-process scheduler access.
+- [x] Legacy in-process `--tui` mode is removed after standalone client is stable.
+
+Passes: true

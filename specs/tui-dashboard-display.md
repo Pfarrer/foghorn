@@ -7,7 +7,7 @@ functional
 Add a read-only terminal user interface (TUI) dashboard for real-time monitoring of check status and scheduler activity, including last run date/time, time until next run, and recent result history
 
 ## Usage Steps
-1. Run Foghorn with `--tui` flag to enable TUI mode
+1. Run `foghorn-tui` and connect to daemon status API
 2. Observe dashboard showing:
    - Summary counters (total checks, running, queued, last completed)
    - List of all checks with status indicators
@@ -20,7 +20,7 @@ Add a read-only terminal user interface (TUI) dashboard for real-time monitoring
 
 ## Implementation Notes
 - Use Go TUI library (e.g., bubbletea, termui, or similar)
-- TUI mode is mutually exclusive with CLI output mode
+- TUI runs as a separate client process from the daemon
 - Display sections:
   - Header: Foghorn title, uptime, configured log level
   - Summary bar: Total checks | Running | Queued | Pass | Fail | Warn
@@ -49,7 +49,7 @@ Add a read-only terminal user interface (TUI) dashboard for real-time monitoring
 - History format: last 10 results as compact symbols (e.g., "✓ ✓ ⚠ ✗ ?")
 
 ## Acceptance Criteria
-- [x] `--tui` flag enables TUI dashboard mode
+- [x] `foghorn-tui` starts TUI dashboard mode
 - [x] Header shows Foghorn title and uptime
 - [x] Summary bar shows accurate counters (total, running, queued, pass, fail, warn)
 - [x] Check list displays all configured checks

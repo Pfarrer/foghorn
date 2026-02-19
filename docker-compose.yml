@@ -4,12 +4,14 @@ services:
     container_name: foghorn
     user: root
     restart: unless-stopped
+    ports:
+      - "7676:7676"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./config.yml:/app/config.yml:ro
+      - ./example.yaml:/app/example.yaml:ro
     environment:
       - TZ=UTC
-    command: ["-c", "/app/config.yml"]
+    command: ["-c", "/app/example.yaml", "--status-listen", "0.0.0.0:7676"]
     logging:
       driver: "json-file"
       options:

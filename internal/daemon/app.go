@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"sort"
@@ -12,15 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/executor"
 	"github.com/pfarrer/foghorn/imageresolver"
+	"github.com/pfarrer/foghorn/internal/statusapi"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
 	"github.com/pfarrer/foghorn/state"
-	"github.com/pfarrer/foghorn/tui"
 )
 
 func Run() {
@@ -31,7 +30,7 @@ func Run() {
 		verbose                 bool
 		dryRun                  bool
 		verifyImageAvailability bool
-		tuiMode                 bool
+		statusListen            string
 		stateLogFile            string
 	)
 
@@ -47,15 +46,14 @@ func Run() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Validate configuration only")
 	flag.BoolVar(&verifyImageAvailability, "i", false, "Verify all Docker images in config are available locally")
 	flag.BoolVar(&verifyImageAvailability, "verify-image-availability", false, "Verify all Docker images in config are available locally")
-	flag.BoolVar(&tuiMode, "tui", false, "Enable TUI dashboard mode")
-	flag.BoolVar(&tuiMode, "t", false, "Enable TUI dashboard mode")
+	flag.StringVar(&statusListen, "status-listen", statusapi.DefaultListenAddr, "Status API listen address")
 	flag.StringVar(&stateLogFile, "s", "", "Path to state log file")
 	flag.StringVar(&stateLogFile, "state-log-file", "", "Path to state log file")
 	flag.StringVar(&stateLogFile, "state_log_file", "", "Path to state log file")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Foghorn - Service Monitoring Tool\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: foghorn [OPTIONS]\n\n")
+		fmt.Fprintf(os.Stderr, "Foghorn Daemon - Service Monitoring Tool\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: foghorn-daemon [OPTIONS]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -c, --config <path>\n")
 		fmt.Fprintf(os.Stderr, "      Path to configuration file\n")
@@ -67,8 +65,8 @@ func Run() {
 		fmt.Fprintf(os.Stderr, "      Validate configuration only\n")
 		fmt.Fprintf(os.Stderr, "  -i, --verify-image-availability\n")
 		fmt.Fprintf(os.Stderr, "      Verify all Docker images in config are available locally\n")
-		fmt.Fprintf(os.Stderr, "  -t, --tui\n")
-		fmt.Fprintf(os.Stderr, "      Enable TUI dashboard mode\n")
+		fmt.Fprintf(os.Stderr, "  --status-listen <addr>\n")
+		fmt.Fprintf(os.Stderr, "      Status API listen address (default: %s)\n", statusapi.DefaultListenAddr)
 		fmt.Fprintf(os.Stderr, "  -s, --state-log-file <path>\n")
 		fmt.Fprintf(os.Stderr, "      Path to state log file\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help\n")
@@ -198,23 +196,29 @@ func Run() {
 	}
 
 	sched.Start(1 * time.Second)
-
-	if tuiMode {
-		logger.SetOutput(io.Discard)
-		model := tui.NewModel(sched, logLevel)
-		p := tea.NewProgram(model)
-		if _, err := p.Run(); err != nil {
-			logger.SetOutput(os.Stdout)
-			logger.Error("Error running TUI: %v", err)
-			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+	statusSrv := statusapi.StartServer(statusListen, sched.Snapshot)
+	statusErr := make(chan error, 1)
+	go func() {
+		logger.Info("Status API listening on http://%s%s", statusListen, statusapi.StatusPath)
+		if err := statusSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			statusErr <- err
 		}
-		logger.SetOutput(os.Stdout)
-	} else {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case <-sigChan:
+	case err := <-statusErr:
+		logger.Error("Status API server error: %v", err)
+		fmt.Fprintf(os.Stderr, "Status API server error: %v\n", err)
 	}
 
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := statusSrv.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("Status API shutdown error: %v", err)
+	}
 	sched.Stop()
 }
 

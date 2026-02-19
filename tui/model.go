@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,12 +15,23 @@ import (
 )
 
 type model struct {
-	scheduler    *scheduler.Scheduler
+	status       statusReader
+	refresher    statusRefresher
 	logLevel     string
 	uptime       time.Time
 	width        int
 	height       int
 	maxCheckRows int
+}
+
+type statusReader interface {
+	GetStartTime() time.Time
+	GetCounts() (total, running, queued, pass, fail, warn int)
+	GetAllChecks() map[string]*scheduler.ScheduledCheck
+}
+
+type statusRefresher interface {
+	Refresh(context.Context) error
 }
 
 type tickMsg time.Time
@@ -32,11 +44,31 @@ func tickEvery(d time.Duration) tea.Cmd {
 
 func NewModel(sched *scheduler.Scheduler, logLevel string) model {
 	return model{
-		scheduler:    sched,
+		status:       sched,
 		logLevel:     logLevel,
 		uptime:       sched.GetStartTime(),
 		maxCheckRows: 20,
 	}
+}
+
+func NewRemoteModel(statusURL, logLevel string) (model, error) {
+	remote, err := newRemoteStatusReader(statusURL)
+	if err != nil {
+		return model{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := remote.Refresh(ctx); err != nil {
+		return model{}, err
+	}
+
+	return model{
+		status:       remote,
+		refresher:    remote,
+		logLevel:     logLevel,
+		uptime:       remote.GetStartTime(),
+		maxCheckRows: 20,
+	}, nil
 }
 
 func (m model) Init() tea.Cmd {
@@ -54,6 +86,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tickMsg:
+		if m.refresher != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			if err := m.refresher.Refresh(ctx); err == nil {
+				if started := m.status.GetStartTime(); !started.IsZero() {
+					m.uptime = started
+				}
+			}
+			cancel()
+		}
 		return m, tickEvery(time.Second)
 	}
 	return m, nil
@@ -102,7 +143,7 @@ func (m model) renderHeader(styles styles) string {
 }
 
 func (m model) renderSummaryBar(styles styles) string {
-	total, running, queued, pass, fail, warn := m.scheduler.GetCounts()
+	total, running, queued, pass, fail, warn := m.status.GetCounts()
 
 	totalStr := styles.summaryText.Render(fmt.Sprintf("Total: %d", total))
 	runningStr := styles.summaryText.Render(fmt.Sprintf("Running: %d", running))
@@ -118,7 +159,7 @@ func (m model) renderSummaryBar(styles styles) string {
 }
 
 func (m model) renderCheckList(styles styles) string {
-	checks := m.scheduler.GetAllChecks()
+	checks := m.status.GetAllChecks()
 
 	if len(checks) == 0 {
 		return styles.empty.Render("No checks configured")

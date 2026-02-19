@@ -4,7 +4,7 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-ARG BINARY=foghorn
+ARG BINARY=foghorn-daemon
 COPY --chown=65532:65532 ${BINARY} ./foghorn
 RUN chmod +x ./foghorn
 

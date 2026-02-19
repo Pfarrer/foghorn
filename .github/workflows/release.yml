@@ -33,14 +33,17 @@ jobs:
         include:
           - target_os: linux
             target_arch: amd64
-            binary_name: foghorn-linux-amd64
+            daemon_binary_name: foghorn-daemon-linux-amd64
+            tui_binary_name: foghorn-tui-linux-amd64
           - target_os: linux
             target_arch: arm64
-            binary_name: foghorn-linux-arm64
+            daemon_binary_name: foghorn-daemon-linux-arm64
+            tui_binary_name: foghorn-tui-linux-arm64
           - target_os: linux
             target_arch: arm
             goarm: 7
-            binary_name: foghorn-linux-armhf
+            daemon_binary_name: foghorn-daemon-linux-armhf
+            tui_binary_name: foghorn-tui-linux-armhf
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,19 +53,33 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Build for ${{ matrix.target_arch }}
+      - name: Build daemon for ${{ matrix.target_arch }}
         env:
           GOOS: ${{ matrix.target_os }}
           GOARCH: ${{ matrix.target_arch }}
           GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 0
-        run: go build -ldflags="-s -w" -o ${{ matrix.binary_name }} ./cmd/foghorn-daemon
+        run: go build -ldflags="-s -w" -o ${{ matrix.daemon_binary_name }} ./cmd/foghorn-daemon
 
-      - name: Upload artifact
+      - name: Build TUI for ${{ matrix.target_arch }}
+        env:
+          GOOS: ${{ matrix.target_os }}
+          GOARCH: ${{ matrix.target_arch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: go build -ldflags="-s -w" -o ${{ matrix.tui_binary_name }} ./cmd/foghorn-tui
+
+      - name: Upload daemon artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary_name }}
-          path: ${{ matrix.binary_name }}
+          name: ${{ matrix.daemon_binary_name }}
+          path: ${{ matrix.daemon_binary_name }}
+
+      - name: Upload TUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.tui_binary_name }}
+          path: ${{ matrix.tui_binary_name }}
 
   docker:
     name: Build and Push Docker Image
@@ -73,15 +90,15 @@ jobs:
         include:
           - target_os: linux
             target_arch: amd64
-            binary_name: foghorn-linux-amd64
+            daemon_binary_name: foghorn-daemon-linux-amd64
             platform: linux/amd64
           - target_os: linux
             target_arch: arm64
-            binary_name: foghorn-linux-arm64
+            daemon_binary_name: foghorn-daemon-linux-arm64
             platform: linux/arm64
           - target_os: linux
             target_arch: arm
-            binary_name: foghorn-linux-armhf
+            daemon_binary_name: foghorn-daemon-linux-armhf
             platform: linux/arm/v7
     permissions:
       contents: read
@@ -103,7 +120,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.binary_name }}
+          name: ${{ matrix.daemon_binary_name }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -113,7 +130,7 @@ jobs:
           push: true
           tags: ghcr.io/pfarrer/foghorn:${{ matrix.target_os }}-${{ matrix.target_arch }}-${{ github.sha }}
           build-args: |
-            BINARY=${{ matrix.binary_name }}
+            BINARY=${{ matrix.daemon_binary_name }}
 
   docker-manifest:
     name: Create Multi-Arch Manifest

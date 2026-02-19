@@ -14,10 +14,16 @@ Checks are Docker containers that run on a predefined schedule, perform custom a
 
 ## Usage
 
-Foghorn can be run with a configuration file:
+Daemon run:
 
 ```bash
-./foghorn -c example.yaml
+./foghorn-daemon -c example.yaml
+```
+
+TUI client run:
+
+```bash
+./foghorn-tui
 ```
 
 ### Command-Line Options
@@ -29,6 +35,7 @@ Foghorn supports the following command-line flags:
 - `-v, --verbose`: Enable verbose logging with timestamps and source file locations
 - `-d, --dry-run`: Validate configuration only without running the scheduler
 - `-i, --verify-image-availability`: Verify all Docker images in config are available locally
+- `--status-listen <addr>`: Status API listen address (default: `127.0.0.1:7676`)
 - `--state-log-file <path>`: Persist check results to a state log file
 - `-h, --help`: Display help message and usage information
 
@@ -36,35 +43,40 @@ Foghorn supports the following command-line flags:
 
 Run with default settings:
 ```bash
-./foghorn -c example.yaml
+./foghorn-daemon -c example.yaml
 ```
 
 Run with debug logging:
 ```bash
-./foghorn -c example.yaml -l debug
+./foghorn-daemon -c example.yaml -l debug
 ```
 
 Run with verbose output:
 ```bash
-./foghorn -c example.yaml -v
+./foghorn-daemon -c example.yaml -v
 ```
 
 Validate configuration only:
 ```bash
-./foghorn -c example.yaml --dry-run
+./foghorn-daemon -c example.yaml --dry-run
 ```
 
 Verify Docker images are available locally:
 ```bash
-./foghorn -c example.yaml --verify-image-availability
+./foghorn-daemon -c example.yaml --verify-image-availability
 ```
 
 Combine flags for full validation:
 ```bash
-./foghorn -c example.yaml --dry-run --verify-image-availability
+./foghorn-daemon -c example.yaml --dry-run --verify-image-availability
 ```
 
 The scheduler will load the configuration and execute checks based on their cron schedules.
+
+### TUI Client Options
+
+- `-u, --status-url <url>`: Daemon status API base URL (default: `http://127.0.0.1:7676`)
+- `-l, --log-level <level>`: Display label in header
 
 ## Docker Check Interface
 

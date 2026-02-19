@@ -30,10 +30,6 @@ These specs are ready to be implemented but have not yet been started.
 - [Auto-Update Check Containers](auto-update-check-containers.md)
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)
-- [Standard DNS Check](standard-dns-check.md)
-- [Standard Port Check](standard-port-check.md)
-- [Standard System Load Check](standard-system-load-check.md)
-- [Standard Ping Check](standard-ping-check.md)
 - [One-Shot Mode](one-shot-mode.md)
 
 ## Blocked

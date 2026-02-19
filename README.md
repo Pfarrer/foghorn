@@ -26,6 +26,42 @@ TUI client run:
 ./foghorn-tui
 ```
 
+### Run Daemon With Docker Compose
+
+Start the daemon:
+
+```bash
+docker compose up -d
+```
+
+Tail logs:
+
+```bash
+docker compose logs -f foghorn
+```
+
+Stop the daemon:
+
+```bash
+docker compose down
+```
+
+The included `docker-compose.yml` publishes the status API on `7676` and starts the daemon with `--status-listen 0.0.0.0:7676`.
+
+### Connect TUI To Compose Daemon
+
+Run the TUI on the host and point it at the daemon status API:
+
+```bash
+./foghorn-tui --status-url http://127.0.0.1:7676
+```
+
+If the daemon is running on another host, replace the URL:
+
+```bash
+./foghorn-tui --status-url http://<daemon-host>:7676
+```
+
 ### Command-Line Options
 
 Foghorn supports the following command-line flags:

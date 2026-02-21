@@ -350,60 +350,47 @@ while :; do
             FETCH_TIMEOUT=15
         fi
 
+        PARSED_RECEIVE_EPOCH=""
         set +e
         FETCH_OUTPUT="$(curl --silent --show-error --max-time "$FETCH_TIMEOUT" --connect-timeout 10 \
             --url "$IMAP_URL" \
             --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-            -X "UID FETCH ${FOUND_UID} (INTERNALDATE BODY.PEEK[HEADER.FIELDS (SUBJECT DATE MESSAGE-ID)])" 2>/dev/null)"
+            -X "UID FETCH ${FOUND_UID} (INTERNALDATE)" 2>/dev/null)"
         FETCH_EXIT=$?
         set -e
-        if [ "$FETCH_EXIT" -ne 0 ]; then
-            emit_fail "failed to fetch IMAP message details"
-        fi
-
-        MATCHED_SUBJECT="$(printf '%s\n' "$FETCH_OUTPUT" | sed -n 's/^Subject:[[:space:]]*//p' | head -n 1)"
-        case "$MATCHED_SUBJECT" in
-            *"$CORRELATION_ID"*) ;;
-            *)
-                FOUND_UID=""
-                ;;
-        esac
-
-        if [ -n "$FOUND_UID" ]; then
+        if [ "$FETCH_EXIT" -eq 0 ]; then
             INTERNAL_DATE="$(printf '%s\n' "$FETCH_OUTPUT" | sed -n 's/.*INTERNALDATE \"\([^\"]*\)\".*/\1/p' | head -n 1)"
             if [ -n "$INTERNAL_DATE" ]; then
                 PARSED_RECEIVE_EPOCH="$(date -u -d "$INTERNAL_DATE" +%s 2>/dev/null || true)"
-            else
-                PARSED_RECEIVE_EPOCH=""
+            fi
+        fi
+
+        if [ -n "$PARSED_RECEIVE_EPOCH" ] && [ "$PARSED_RECEIVE_EPOCH" -lt "$START_TIME_EPOCH" ]; then
+            FOUND_UID=""
+        else
+            if [ -z "$PARSED_RECEIVE_EPOCH" ]; then
+                PARSED_RECEIVE_EPOCH="$(date +%s)"
+            fi
+            DELIVERY_SECONDS="$((PARSED_RECEIVE_EPOCH - SEND_EPOCH))"
+            if [ "$DELIVERY_SECONDS" -lt 0 ]; then
+                DELIVERY_SECONDS=0
+            fi
+            FOUND_RECEIVE_TIME="$(date -u -d "@${PARSED_RECEIVE_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+            if [ "$DELETE_AFTER_MATCH" = "true" ]; then
+                set +e
+                curl --silent --show-error --max-time 10 --connect-timeout 5 \
+                    --url "$IMAP_URL" \
+                    --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
+                    -X "UID STORE ${FOUND_UID} +FLAGS.SILENT (\\Deleted)" >/dev/null 2>&1
+                curl --silent --show-error --max-time 10 --connect-timeout 5 \
+                    --url "$IMAP_URL" \
+                    --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
+                    -X "EXPUNGE" >/dev/null 2>&1
+                set -e
             fi
 
-            if [ -n "$PARSED_RECEIVE_EPOCH" ] && [ "$PARSED_RECEIVE_EPOCH" -lt "$START_TIME_EPOCH" ]; then
-                FOUND_UID=""
-            else
-                if [ -z "$PARSED_RECEIVE_EPOCH" ]; then
-                    PARSED_RECEIVE_EPOCH="$(date +%s)"
-                fi
-                DELIVERY_SECONDS="$((PARSED_RECEIVE_EPOCH - SEND_EPOCH))"
-                if [ "$DELIVERY_SECONDS" -lt 0 ]; then
-                    DELIVERY_SECONDS=0
-                fi
-                FOUND_RECEIVE_TIME="$(date -u -d "@${PARSED_RECEIVE_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-                if [ "$DELETE_AFTER_MATCH" = "true" ]; then
-                    set +e
-                    curl --silent --show-error --max-time 10 --connect-timeout 5 \
-                        --url "$IMAP_URL" \
-                        --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-                        -X "UID STORE ${FOUND_UID} +FLAGS.SILENT (\\Deleted)" >/dev/null 2>&1
-                    curl --silent --show-error --max-time 10 --connect-timeout 5 \
-                        --url "$IMAP_URL" \
-                        --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-                        -X "EXPUNGE" >/dev/null 2>&1
-                    set -e
-                fi
-
-                break
-            fi
+            break
         fi
     fi
 

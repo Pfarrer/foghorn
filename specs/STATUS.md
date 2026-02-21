@@ -33,6 +33,8 @@ These specs are ready to be implemented but have not yet been started.
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)
 - [One-Shot Mode](one-shot-mode.md)
+- [Secret Injection for Check Containers](secret-injection-for-check-containers.md)
+- [Secret Exposure Prevention in Logs, Process Lists, and Endpoints](secret-exposure-prevention.md)
 
 ## Blocked
 No specs are currently blocked.

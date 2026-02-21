@@ -24,6 +24,7 @@ These specs have been implemented and all acceptance criteria pass.
 - [State File Locking](state-file-locking.md)
 - [Standard OpenSSL TLS Check Container](standard-openssl-check.md)
 - [Daemon and Client Modularization](daemon-client-modularization.md)
+- [Standard Mail Send/Receive Check Container](standard-mail-send-receive-check.md)
 
 ## Ready
 These specs are ready to be implemented but have not yet been started.
@@ -32,7 +33,6 @@ These specs are ready to be implemented but have not yet been started.
 - [Protobuf Status Endpoint](protobuf-status-endpoint.md)
 - [Check Execution History Tracking](check-execution-history.md)
 - [One-Shot Mode](one-shot-mode.md)
-- [Standard Mail Send/Receive Check Container](standard-mail-send-receive-check.md)
 
 ## Blocked
 No specs are currently blocked.

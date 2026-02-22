@@ -238,8 +238,8 @@ func MasterKeyFromEnv() ([]byte, error) {
 
 func normalizeMasterKey(key []byte) []byte {
 	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		panic(err)
+	for i := 0; i < len(salt); i++ {
+		salt[i] = key[i%len(key)]
 	}
 	return argon2.IDKey(key, salt, 1, 64*1024, 4, 32)
 }

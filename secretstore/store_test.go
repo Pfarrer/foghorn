@@ -143,6 +143,42 @@ func TestSecretValueMaxSize(t *testing.T) {
 	}
 }
 
+func TestStorePersistenceAcrossInstances(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secrets.enc")
+	masterKey := []byte("test-master-key-thirty-two-bytes-long")
+
+	store1, err := New(path, masterKey)
+	if err != nil {
+		t.Fatalf("failed to create first store: %v", err)
+	}
+
+	if err := store1.Set("test/key", "secret-value"); err != nil {
+		t.Fatalf("set failed: %v", err)
+	}
+
+	store2, err := New(path, masterKey)
+	if err != nil {
+		t.Fatalf("failed to create second store: %v", err)
+	}
+
+	keys, err := store2.ListKeys()
+	if err != nil {
+		t.Fatalf("list failed on second store: %v", err)
+	}
+	if len(keys) != 1 || keys[0] != "test/key" {
+		t.Fatalf("unexpected keys from second store: %#v", keys)
+	}
+
+	value, err := store2.Resolve("secret://test/key")
+	if err != nil {
+		t.Fatalf("resolve failed on second store: %v", err)
+	}
+	if value != "secret-value" {
+		t.Fatalf("unexpected value from second store: %s", value)
+	}
+}
+
 func contains(s string, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

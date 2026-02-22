@@ -109,13 +109,25 @@ emit_unknown() {
     exit 1
 }
 
+read_secret_file() {
+    var_name="$1"
+    file_var="${var_name}_FILE"
+    eval "file_path=\${$file_var:-}"
+    if [ -n "$file_path" ] && [ -f "$file_path" ]; then
+        cat "$file_path"
+        return 0
+    fi
+    eval "raw_value=\${$var_name:-}"
+    printf '%s' "$raw_value"
+}
+
 START_TIME_MS="$(now_ms)"
 START_TIME_EPOCH="$(date +%s)"
 
 SMTP_HOST="${SMTP_HOST:-}"
 SMTP_PORT_RAW="${SMTP_PORT:-587}"
 SMTP_USERNAME="${SMTP_USERNAME:-}"
-SMTP_PASSWORD="${SMTP_PASSWORD:-}"
+SMTP_PASSWORD="$(read_secret_file SMTP_PASSWORD)"
 SMTP_TLS_MODE="$(printf '%s' "${SMTP_TLS_MODE:-starttls}" | tr '[:upper:]' '[:lower:]')"
 MAIL_FROM="${MAIL_FROM:-}"
 MAIL_TO="${MAIL_TO:-}"
@@ -125,7 +137,7 @@ BODY_TEMPLATE="${BODY_TEMPLATE:-Foghorn mail check}"
 RECEIVE_HOST="${RECEIVE_HOST:-}"
 RECEIVE_PORT_RAW="${RECEIVE_PORT:-993}"
 RECEIVE_USERNAME="${RECEIVE_USERNAME:-}"
-RECEIVE_PASSWORD="${RECEIVE_PASSWORD:-}"
+RECEIVE_PASSWORD="$(read_secret_file RECEIVE_PASSWORD)"
 RECEIVE_TLS_RAW="$(printf '%s' "${RECEIVE_TLS:-true}" | tr '[:upper:]' '[:lower:]')"
 RECEIVE_MAILBOX="${RECEIVE_MAILBOX:-INBOX}"
 

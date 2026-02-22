@@ -21,9 +21,12 @@ Define a single secret storage and delivery model for check containers without s
 - Provide a secret management CLI to set, update, list keys, and delete keys without printing secret values.
 
 ## Acceptance Criteria
-- [ ] Checks can reference secrets by key without embedding cleartext in YAML config.
-- [ ] Secret values are encrypted at rest in the local secret store.
-- [ ] Secret values are resolved only at runtime in memory.
-- [ ] Secret values are delivered to check containers without Docker CLI secret arguments.
-- [ ] Secret values are never written to state/history files.
-- [ ] Secret management CLI supports create, rotate, and delete operations.
+- [x] Checks can reference secrets by key without embedding cleartext in YAML config.
+- [x] Secret values are encrypted at rest in the local secret store.
+- [x] Secret values are resolved only at runtime in memory.
+- [x] Secret values are delivered to check containers without Docker CLI secret arguments.
+- [x] Secret values are never written to state/history files.
+- [x] Secret management CLI supports create, rotate, and delete operations.
+
+## Passes
+true

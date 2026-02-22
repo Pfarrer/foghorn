@@ -73,6 +73,7 @@ Foghorn supports the following command-line flags:
 - `-i, --verify-image-availability`: Verify all Docker images in config are available locally
 - `--status-listen <addr>`: Status API listen address (default: `127.0.0.1:7676`)
 - `--state-log-file <path>`: Persist check results to a state log file
+- `--secret-store-file <path>`: Path to encrypted secret store file
 - `-h, --help`: Display help message and usage information
 
 ### Examples
@@ -107,6 +108,14 @@ Combine flags for full validation:
 ./foghorn-daemon -c example.yaml --dry-run --verify-image-availability
 ```
 
+Manage secrets:
+```bash
+export FOGHORN_SECRET_MASTER_KEY="$(openssl rand -base64 32)"
+printf '%s' 'smtp-password' | ./foghorn-daemon secret set smtp/password
+./foghorn-daemon secret list
+./foghorn-daemon secret delete smtp/password
+```
+
 The scheduler will load the configuration and execute checks based on their cron schedules.
 
 ### TUI Client Options
@@ -125,10 +134,24 @@ Check containers receive the following environment variables from Foghorn:
 - `FOGHORN_CHECK_NAME`: Name of the check
 - `FOGHORN_CHECK_CONFIG`: JSON string with check-specific configuration (from metadata)
 - `FOGHORN_ENDPOINT`: Target endpoint to check (if applicable)
-- `FOGHORN_SECRETS`: JSON string with secrets (for environment variables starting with `SECRET_`)
 - `FOGHORN_TIMEOUT`: Timeout duration for the check
 
-All other custom environment variables defined in the check configuration are also passed to the container.
+Secret injection:
+- Set config env values to `secret://<key>` (example: `SMTP_PASSWORD: secret://smtp/password`)
+- Foghorn resolves secrets only at runtime in memory
+- Resolved secrets are written to ephemeral files mounted at `/run/foghorn/secrets`
+- For each secret env key `NAME`, Foghorn injects `NAME_FILE=/run/foghorn/secrets/NAME`
+- Check containers should read from the `_FILE` path, not the env variable itself
+- This approach prevents secrets from appearing in container logs or process listings
+
+Example check container reading a secret:
+```bash
+# Read secret from the file path (recommended)
+PASSWORD=$(cat "$SMTP_PASSWORD_FILE")
+# Do NOT read from $SMTP_PASSWORD directly (contains "secret://..." reference)
+```
+
+All other non-secret environment variables in config are passed directly to the container.
 
 ### Output Format
 
@@ -189,6 +212,7 @@ Check containers must use semantic version tags. Supported selectors are `MAJOR`
 - `max_concurrent_checks`: Maximum number of checks that can run simultaneously (optional, defaults to unlimited)
 - `state_log_period`: Retention period for state log records (optional, required when state log file is set)
 - `state_log_file`: Optional state log file path (CLI `--state-log-file` overrides)
+- `secret_store_file`: Optional encrypted secret store file path (CLI `--secret-store-file` overrides)
 
 ### Concurrency Control
 

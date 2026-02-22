@@ -131,6 +131,9 @@ func mergeConfig(dst *Config, src *Config) {
 	if src.StateLogPeriod != "" {
 		dst.StateLogPeriod = src.StateLogPeriod
 	}
+	if src.SecretStoreFile != "" {
+		dst.SecretStoreFile = src.SecretStoreFile
+	}
 	if len(src.Global) > 0 {
 		if dst.Global == nil {
 			dst.Global = make(map[string]interface{}, len(src.Global))

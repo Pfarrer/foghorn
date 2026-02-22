@@ -2,9 +2,14 @@ package executor
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +21,7 @@ import (
 	"github.com/pfarrer/foghorn/imageresolver"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
+	"github.com/pfarrer/foghorn/secretstore"
 )
 
 type CheckResult struct {
@@ -33,6 +39,12 @@ type DockerExecutor struct {
 	resultCallback func(checkName string, status string, duration time.Duration)
 	resolveMu      sync.Mutex
 	resolvedImages map[string]string
+	secretResolver SecretResolver
+	secretBaseDir  string
+}
+
+type SecretResolver interface {
+	Resolve(ref string) (string, error)
 }
 
 type ExecuteOptions struct {
@@ -46,11 +58,21 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
+	secretBaseDir := filepath.Join(os.TempDir(), "foghorn-secrets")
+	if err := os.MkdirAll(secretBaseDir, 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create secret base directory: %w", err)
+	}
+
+	if err := cleanupOldSecretDirs(secretBaseDir); err != nil {
+		logger.Warn("Failed to cleanup old secret directories: %v", err)
+	}
+
 	return &DockerExecutor{
 		cli:            cli,
 		defaultTimeout: 30 * time.Second,
 		outputLocation: "stdout",
 		resolvedImages: make(map[string]string),
+		secretBaseDir:  secretBaseDir,
 	}, nil
 }
 
@@ -96,7 +118,18 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	logger.Debug("Check %s: Creating container with image %s (timeout: %v)", checkName, image, timeout)
 
-	env := e.buildEnvVars(checkConfig)
+	env, secretDir, err := e.buildEnvVars(checkConfig)
+	if err != nil {
+		duration := time.Since(startTime)
+		if e.resultCallback != nil {
+			e.resultCallback(checkName, "error", duration)
+		}
+		logger.Error("Check %s: Failed to prepare environment: %v", checkName, err)
+		return err
+	}
+	if secretDir != "" {
+		defer cleanupSecretDir(secretDir)
+	}
 
 	containerConfig := &container.Config{
 		Image: image,
@@ -105,6 +138,9 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	hostConfig := &container.HostConfig{
 		AutoRemove: false,
+	}
+	if secretDir != "" {
+		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:/run/foghorn/secrets:ro", secretDir))
 	}
 
 	resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
@@ -174,7 +210,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	}
 }
 
-func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) []string {
+func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, string, error) {
 	env := []string{
 		fmt.Sprintf("FOGHORN_CHECK_NAME=%s", check.Name),
 	}
@@ -195,22 +231,44 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) []string {
 		env = append(env, fmt.Sprintf("FOGHORN_TIMEOUT=%s", timeout))
 	}
 
+	secretDir := ""
 	for k, v := range check.Env {
-		if strings.HasPrefix(k, "SECRET_") {
-			secrets := map[string]string{k: v}
-			secretsJSON, _ := json.Marshal(secrets)
-			env = append(env, fmt.Sprintf("FOGHORN_SECRETS=%s", string(secretsJSON)))
-			break
+		if refKey, ok := secretstore.ParseRef(v); ok {
+			if e.secretResolver == nil {
+				return nil, "", fmt.Errorf("check %s requires secret %q, but secret store is not configured", check.Name, refKey)
+			}
+
+			secretValue, err := e.secretResolver.Resolve(v)
+			if err != nil {
+				return nil, "", fmt.Errorf("check %s failed resolving secret: %w", check.Name, err)
+			}
+			if secretDir == "" {
+				dir, err := e.createSecretDir()
+				if err != nil {
+					return nil, "", fmt.Errorf("failed to create temporary secret directory: %w", err)
+				}
+				secretDir = dir
+			}
+
+			filename := sanitizeSecretFilename(k)
+			secretPath := filepath.Join(secretDir, filename)
+			if err := os.WriteFile(secretPath, []byte(secretValue), 0o600); err != nil {
+				return nil, "", fmt.Errorf("failed to write secret file for %s: %w", k, err)
+			}
+			env = append(env, fmt.Sprintf("%s_FILE=/run/foghorn/secrets/%s", k, filename))
 		}
 	}
 
 	for k, v := range check.Env {
-		if !strings.HasPrefix(k, "FOGHORN_") && k != "ENDPOINT" && !strings.HasPrefix(k, "SECRET_") {
+		if _, ok := secretstore.ParseRef(v); ok {
+			continue
+		}
+		if !strings.HasPrefix(k, "FOGHORN_") && k != "ENDPOINT" {
 			env = append(env, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
 
-	return env
+	return env, secretDir, nil
 }
 
 func demultiplexLogs(data []byte) []byte {
@@ -287,6 +345,20 @@ func (e *DockerExecutor) SetResultCallback(callback func(checkName string, statu
 	e.resultCallback = callback
 }
 
+func (e *DockerExecutor) SetSecretResolver(resolver SecretResolver) {
+	e.secretResolver = resolver
+}
+
+var nonFileSafeChars = regexp.MustCompile(`[^A-Za-z0-9._-]`)
+
+func sanitizeSecretFilename(input string) string {
+	sanitized := nonFileSafeChars.ReplaceAllString(input, "_")
+	if sanitized == "" {
+		return "secret"
+	}
+	return sanitized
+}
+
 func (e *DockerExecutor) resolveImage(ctx context.Context, image string) (string, error) {
 	e.resolveMu.Lock()
 	if resolved, ok := e.resolvedImages[image]; ok {
@@ -305,6 +377,70 @@ func (e *DockerExecutor) resolveImage(ctx context.Context, image string) (string
 	e.resolveMu.Unlock()
 
 	return resolved, nil
+}
+
+func (e *DockerExecutor) createSecretDir() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random suffix: %w", err)
+	}
+	suffix := hex.EncodeToString(b)
+
+	dir := filepath.Join(e.secretBaseDir, suffix)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create secret directory: %w", err)
+	}
+
+	tsFile := filepath.Join(dir, ".timestamp")
+	if err := os.WriteFile(tsFile, []byte(time.Now().Format(time.RFC3339)), 0o600); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", fmt.Errorf("failed to write timestamp file: %w", err)
+	}
+
+	return dir, nil
+}
+
+func cleanupSecretDir(secretDir string) error {
+	return os.RemoveAll(secretDir)
+}
+
+func cleanupOldSecretDirs(baseDir string) error {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		dir := filepath.Join(baseDir, entry.Name())
+		tsFile := filepath.Join(dir, ".timestamp")
+
+		data, err := os.ReadFile(tsFile)
+		if err != nil {
+			continue
+		}
+
+		ts, err := time.Parse(time.RFC3339, string(data))
+		if err != nil {
+			continue
+		}
+
+		if ts.Before(cutoff) {
+			if err := os.RemoveAll(dir); err == nil {
+				logger.Debug("Cleanup old secret directory: %s", dir)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (e *DockerExecutor) ensureImageAvailable(ctx context.Context, imageRef string, checkName string) error {

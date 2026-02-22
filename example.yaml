@@ -1,5 +1,6 @@
 version: "1.0"
 state_log_period: "24h"
+secret_store_file: "~/.config/foghorn/secrets.enc"
 
 ---
 name: "http-health-check"
@@ -48,3 +49,25 @@ env:
   WARNING_THRESHOLD_PERCENT: "80"
   CRITICAL_THRESHOLD_PERCENT: "90"
   CHECK_INODES: "true"
+
+---
+name: "mail-send-receive-check"
+description: "Sends and verifies probe email"
+enabled: false
+image: "ghcr.io/pfarrer/foghorn-mail-send-receive-check:1"
+schedule:
+  interval: "15m"
+evaluation:
+  - type: "json"
+    condition: "status == 'pass'"
+    expected: true
+env:
+  SMTP_HOST: "smtp.example.com"
+  SMTP_USERNAME: "probe-smtp"
+  SMTP_PASSWORD: "secret://mail/smtp_password"
+  MAIL_FROM: "probe@example.com"
+  MAIL_TO: "probe@example.com"
+  RECEIVE_HOST: "imap.example.com"
+  RECEIVE_USERNAME: "probe-imap"
+  RECEIVE_PASSWORD: "secret://mail/imap_password"
+  DEADLINE_SECONDS: "60"

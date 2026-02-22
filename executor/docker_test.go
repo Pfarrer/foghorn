@@ -2,6 +2,8 @@ package executor
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -42,10 +44,7 @@ func TestCheckResultJSON(t *testing.T) {
 }
 
 func TestBuildEnvVars(t *testing.T) {
-	exec, err := NewDockerExecutor()
-	if err != nil {
-		t.Fatalf("Failed to create executor: %v", err)
-	}
+	exec := &DockerExecutor{}
 
 	checkConfig := &config.CheckConfig{
 		Name:    "test-check",
@@ -55,7 +54,6 @@ func TestBuildEnvVars(t *testing.T) {
 		Env: map[string]string{
 			"ENDPOINT":   "https://example.com",
 			"CUSTOM_VAR": "custom-value",
-			"SECRET_KEY": "secret-value",
 		},
 		Metadata: map[string]interface{}{
 			"priority": "high",
@@ -63,7 +61,13 @@ func TestBuildEnvVars(t *testing.T) {
 		},
 	}
 
-	env := exec.buildEnvVars(checkConfig)
+	env, secretDir, err := exec.buildEnvVars(checkConfig)
+	if err != nil {
+		t.Fatalf("buildEnvVars failed: %v", err)
+	}
+	if secretDir != "" {
+		t.Fatalf("did not expect secret directory, got %s", secretDir)
+	}
 
 	envMap := make(map[string]string)
 	for _, e := range env {
@@ -93,16 +97,92 @@ func TestBuildEnvVars(t *testing.T) {
 		t.Errorf("Expected CUSTOM_VAR=custom-value, got %s", envMap["CUSTOM_VAR"])
 	}
 
-	if envMap["SECRET_KEY"] == "secret-value" {
-		t.Error("SECRET_KEY should not be passed directly")
-	}
-
-	if envMap["FOGHORN_SECRETS"] == "" {
-		t.Error("FOGHORN_SECRETS should be set when SECRET_KEY is present")
-	}
-
 	if envMap["FOGHORN_CHECK_CONFIG"] == "" {
 		t.Error("FOGHORN_CHECK_CONFIG should be set when metadata is present")
+	}
+}
+
+type testSecretResolver struct {
+	values map[string]string
+}
+
+func (r *testSecretResolver) Resolve(ref string) (string, error) {
+	value, ok := r.values[ref]
+	if !ok {
+		return "", fmt.Errorf("not found")
+	}
+	return value, nil
+}
+
+func TestBuildEnvVarsWithSecretReferences(t *testing.T) {
+	exec := &DockerExecutor{
+		secretResolver: &testSecretResolver{
+			values: map[string]string{
+				"secret://smtp/password": "smtp-secret",
+			},
+		},
+	}
+
+	checkConfig := &config.CheckConfig{
+		Name:    "mail-check",
+		Image:   "test-image",
+		Enabled: true,
+		Env: map[string]string{
+			"SMTP_PASSWORD": "secret://smtp/password",
+			"SMTP_HOST":     "smtp.example.com",
+		},
+	}
+
+	env, secretDir, err := exec.buildEnvVars(checkConfig)
+	if err != nil {
+		t.Fatalf("buildEnvVars failed: %v", err)
+	}
+	if secretDir == "" {
+		t.Fatal("expected secret directory to be created")
+	}
+	defer os.RemoveAll(secretDir)
+
+	envMap := make(map[string]string)
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["SMTP_PASSWORD"] != "" {
+		t.Error("expected SMTP_PASSWORD not to be passed directly")
+	}
+	if envMap["SMTP_PASSWORD_FILE"] != "/run/foghorn/secrets/SMTP_PASSWORD" {
+		t.Errorf("unexpected SMTP_PASSWORD_FILE value: %q", envMap["SMTP_PASSWORD_FILE"])
+	}
+	if envMap["SMTP_HOST"] != "smtp.example.com" {
+		t.Errorf("expected SMTP_HOST to be passed through, got %q", envMap["SMTP_HOST"])
+	}
+
+	secretBytes, err := os.ReadFile(secretDir + "/SMTP_PASSWORD")
+	if err != nil {
+		t.Fatalf("failed to read secret file: %v", err)
+	}
+	if string(secretBytes) != "smtp-secret" {
+		t.Errorf("unexpected secret file content: %q", string(secretBytes))
+	}
+}
+
+func TestBuildEnvVarsWithSecretReferenceMissingResolver(t *testing.T) {
+	exec := &DockerExecutor{}
+	checkConfig := &config.CheckConfig{
+		Name:    "mail-check",
+		Image:   "test-image",
+		Enabled: true,
+		Env: map[string]string{
+			"SMTP_PASSWORD": "secret://smtp/password",
+		},
+	}
+
+	_, _, err := exec.buildEnvVars(checkConfig)
+	if err == nil {
+		t.Fatal("expected error for missing secret resolver")
 	}
 }
 

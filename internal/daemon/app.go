@@ -1,12 +1,16 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -19,10 +23,16 @@ import (
 	"github.com/pfarrer/foghorn/internal/statusapi"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
+	"github.com/pfarrer/foghorn/secretstore"
 	"github.com/pfarrer/foghorn/state"
 )
 
 func Run() {
+	if len(os.Args) > 1 && os.Args[1] == "secret" {
+		exitCode := runSecretCLI(os.Args[2:])
+		os.Exit(exitCode)
+	}
+
 	var (
 		help                    bool
 		configPath              string
@@ -32,6 +42,7 @@ func Run() {
 		verifyImageAvailability bool
 		statusListen            string
 		stateLogFile            string
+		secretStoreFile         string
 	)
 
 	flag.BoolVar(&help, "h", false, "Show help message")
@@ -50,6 +61,7 @@ func Run() {
 	flag.StringVar(&stateLogFile, "s", "", "Path to state log file")
 	flag.StringVar(&stateLogFile, "state-log-file", "", "Path to state log file")
 	flag.StringVar(&stateLogFile, "state_log_file", "", "Path to state log file")
+	flag.StringVar(&secretStoreFile, "secret-store-file", "", "Path to encrypted secret store file")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn Daemon - Service Monitoring Tool\n\n")
@@ -69,6 +81,8 @@ func Run() {
 		fmt.Fprintf(os.Stderr, "      Status API listen address (default: %s)\n", statusapi.DefaultListenAddr)
 		fmt.Fprintf(os.Stderr, "  -s, --state-log-file <path>\n")
 		fmt.Fprintf(os.Stderr, "      Path to state log file\n")
+		fmt.Fprintf(os.Stderr, "  --secret-store-file <path>\n")
+		fmt.Fprintf(os.Stderr, "      Path to encrypted secret store file\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help\n")
 		fmt.Fprintf(os.Stderr, "      Show help message\n")
 	}
@@ -173,6 +187,17 @@ func Run() {
 	}
 	defer dockerExecutor.Close()
 
+	if configUsesSecrets(cfg) {
+		storePath := resolveSecretStorePath(secretStoreFile, cfg.SecretStoreFile)
+		store, err := loadSecretStore(storePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading secret store: %v\n", err)
+			os.Exit(1)
+		}
+		dockerExecutor.SetSecretResolver(store)
+		logger.Info("Secret store enabled: %s", storePath)
+	}
+
 	maxConcurrent := cfg.MaxConcurrentChecks
 	if maxConcurrent > 0 {
 		logger.Info("Maximum concurrent checks: %d", maxConcurrent)
@@ -220,6 +245,178 @@ func Run() {
 		logger.Warn("Status API shutdown error: %v", err)
 	}
 	sched.Stop()
+}
+
+func runSecretCLI(args []string) int {
+	fs := flag.NewFlagSet("secret", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var (
+		storePathArg  string
+		configPathArg string
+		valueArg      string
+	)
+	fs.StringVar(&storePathArg, "store", "", "Path to encrypted secret store file")
+	fs.StringVar(&storePathArg, "secret-store-file", "", "Path to encrypted secret store file")
+	fs.StringVar(&configPathArg, "c", "", "Path to configuration file")
+	fs.StringVar(&configPathArg, "config", "", "Path to configuration file")
+	fs.StringVar(&valueArg, "value", "", "Secret value (avoid this flag in shared environments)")
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		printSecretUsage()
+		return 1
+	}
+
+	parts := fs.Args()
+	if len(parts) == 0 {
+		printSecretUsage()
+		return 1
+	}
+
+	storePath := resolveSecretStorePath(storePathArg, configSecretStorePath(configPathArg))
+	store, err := loadSecretStore(storePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	cmd := parts[0]
+	switch cmd {
+	case "list":
+		keys, err := store.ListKeys()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error listing secrets: %v\n", err)
+			return 1
+		}
+		for _, key := range keys {
+			fmt.Println(key)
+		}
+		return 0
+	case "set", "rotate":
+		if len(parts) < 2 {
+			fmt.Fprintf(os.Stderr, "Error: secret key is required\n")
+			printSecretUsage()
+			return 1
+		}
+		key := parts[1]
+		value := valueArg
+		if value == "" {
+			v, err := readSecretValueFromStdin()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading secret from stdin: %v\n", err)
+				return 1
+			}
+			value = v
+		}
+		if value == "" {
+			fmt.Fprintf(os.Stderr, "Error: secret value cannot be empty\n")
+			return 1
+		}
+		if err := store.Set(key, value); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing secret: %v\n", err)
+			return 1
+		}
+		fmt.Printf("stored secret key: %s\n", key)
+		return 0
+	case "delete":
+		if len(parts) < 2 {
+			fmt.Fprintf(os.Stderr, "Error: secret key is required\n")
+			printSecretUsage()
+			return 1
+		}
+		key := parts[1]
+		deleted, err := store.Delete(key)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error deleting secret: %v\n", err)
+			return 1
+		}
+		if !deleted {
+			fmt.Printf("secret key not found: %s\n", key)
+			return 0
+		}
+		fmt.Printf("deleted secret key: %s\n", key)
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "Error: unknown secret command %q\n", cmd)
+		printSecretUsage()
+		return 1
+	}
+}
+
+func printSecretUsage() {
+	fmt.Fprintf(os.Stderr, "Usage:\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] list\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] [--value <val>] set <key>\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] [--value <val>] rotate <key>\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] delete <key>\n")
+	fmt.Fprintf(os.Stderr, "Notes:\n")
+	fmt.Fprintf(os.Stderr, "  - Set/rotate reads value from stdin when --value is omitted.\n")
+	fmt.Fprintf(os.Stderr, "  - Requires FOGHORN_SECRET_MASTER_KEY in environment.\n")
+}
+
+func readSecretValueFromStdin() (string, error) {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return "", err
+	}
+	if (info.Mode() & os.ModeCharDevice) != 0 {
+		return "", errors.New("no stdin provided; pipe a secret value or use --value")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func configSecretStorePath(configPath string) string {
+	if configPath == "" {
+		return ""
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return ""
+	}
+	return cfg.SecretStoreFile
+}
+
+func configUsesSecrets(cfg *config.Config) bool {
+	for _, check := range cfg.Checks {
+		for _, value := range check.Env {
+			if _, ok := secretstore.ParseRef(value); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func resolveSecretStorePath(cliPath string, cfgPath string) string {
+	if cliPath != "" {
+		return cliPath
+	}
+	if cfgPath != "" {
+		return cfgPath
+	}
+	if envPath := strings.TrimSpace(os.Getenv("FOGHORN_SECRET_STORE_FILE")); envPath != "" {
+		return envPath
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ".foghorn-secrets.enc"
+	}
+	return filepath.Join(home, ".config", "foghorn", "secrets.enc")
+}
+
+func loadSecretStore(path string) (*secretstore.Store, error) {
+	masterKey, err := secretstore.MasterKeyFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return secretstore.New(path, masterKey)
 }
 
 func verifyImageAvailabilityFn(cfg *config.Config) error {

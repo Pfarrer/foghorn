@@ -33,4 +33,5 @@ type Config struct {
 	MaxConcurrentChecks int                    `yaml:"max_concurrent_checks,omitempty"`
 	StateLogFile        string                 `yaml:"state_log_file,omitempty"`
 	StateLogPeriod      string                 `yaml:"state_log_period,omitempty"`
+	SecretStoreFile     string                 `yaml:"secret_store_file,omitempty"`
 }

@@ -368,3 +368,40 @@ func TestCheckResultValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestTruncateLogOutput(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxChars int
+		want     string
+	}{
+		{
+			name:     "no truncation when shorter",
+			input:    "hello",
+			maxChars: 10,
+			want:     "hello",
+		},
+		{
+			name:     "no truncation when disabled",
+			input:    "hello",
+			maxChars: 0,
+			want:     "hello",
+		},
+		{
+			name:     "truncate with marker",
+			input:    "abcdefghij",
+			maxChars: 5,
+			want:     "abcde\n... (truncated)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateLogOutput(tt.input, tt.maxChars)
+			if got != tt.want {
+				t.Errorf("truncateLogOutput() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

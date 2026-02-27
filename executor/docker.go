@@ -43,6 +43,8 @@ type DockerExecutor struct {
 	secretBaseDir  string
 }
 
+const maxFailureLogChars = 4096
+
 type SecretResolver interface {
 	Resolve(ref string) (string, error)
 }
@@ -170,6 +172,17 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	select {
 	case statusResult := <-statusCh:
 		if statusResult.StatusCode != 0 {
+			debugCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			failureOutput, logErr := e.readContainerOutput(debugCtx, resp.ID, true, true)
+			cancel()
+			if logErr != nil {
+				logger.Debug("Check %s: Failed to read container output after non-zero exit: %v", checkName, logErr)
+			} else if failureOutput == "" {
+				logger.Debug("Check %s: Container output on failure was empty", checkName)
+			} else {
+				logger.Debug("Check %s: Container output on failure:\n%s", checkName, truncateLogOutput(failureOutput, maxFailureLogChars))
+			}
+
 			duration := time.Since(startTime)
 			if e.resultCallback != nil {
 				e.resultCallback(checkName, "error", duration)
@@ -288,24 +301,36 @@ func demultiplexLogs(data []byte) []byte {
 	return result
 }
 
-func (e *DockerExecutor) readResult(ctx context.Context, containerID string) (*CheckResult, error) {
-	reader, err := e.cli.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: false,
-	})
+func truncateLogOutput(output string, maxChars int) string {
+	if maxChars <= 0 || len(output) <= maxChars {
+		return output
+	}
+	return output[:maxChars] + "\n... (truncated)"
+}
 
+func (e *DockerExecutor) readContainerOutput(ctx context.Context, containerID string, showStdout bool, showStderr bool) (string, error) {
+	reader, err := e.cli.ContainerLogs(ctx, containerID, container.LogsOptions{
+		ShowStdout: showStdout,
+		ShowStderr: showStderr,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read container logs: %w", err)
+		return "", fmt.Errorf("failed to read container logs: %w", err)
 	}
 	defer reader.Close()
 
 	logs, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read logs: %w", err)
+		return "", fmt.Errorf("failed to read logs: %w", err)
 	}
 
-	logStr := string(demultiplexLogs(logs))
-	logStr = strings.TrimSpace(logStr)
+	return strings.TrimSpace(string(demultiplexLogs(logs))), nil
+}
+
+func (e *DockerExecutor) readResult(ctx context.Context, containerID string) (*CheckResult, error) {
+	logStr, err := e.readContainerOutput(ctx, containerID, true, false)
+	if err != nil {
+		return nil, err
+	}
 
 	var result CheckResult
 	if err := json.Unmarshal([]byte(logStr), &result); err != nil {

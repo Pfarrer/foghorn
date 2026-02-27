@@ -161,7 +161,6 @@ func (s *Scheduler) run() {
 
 func (s *Scheduler) tick() {
 	now := time.Now().In(s.location)
-	logger.Debug("Scheduler tick at %v", now.Format(time.RFC3339))
 
 	s.processQueue()
 

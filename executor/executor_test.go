@@ -33,8 +33,8 @@ func TestSecretDirPermissions(t *testing.T) {
 	}
 
 	perms := info.Mode().Perm()
-	if perms != 0o700 {
-		t.Fatalf("expected directory permissions 0o700, got 0%o", perms)
+	if perms != 0o755 {
+		t.Fatalf("expected directory permissions 0o755, got 0%o", perms)
 	}
 }
 

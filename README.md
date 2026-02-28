@@ -187,7 +187,7 @@ By default, Foghorn reads JSON output from container stdout. Alternatively, cont
 
 ### Example Check Container
 
-See `containers/disk-check/`, `containers/http-check/`, `containers/openssl-check/`, and `containers/mail-send-receive-check/` for maintained check container implementations of the Foghorn check interface.
+See `containers/disk-check/`, `containers/http-check/`, `containers/openssl-check/`, `containers/mail-send-receive-check/`, and `containers/env-dump-check/` for maintained check container implementations of the Foghorn check interface.
 Built-in check containers live under `containers/` and are published to GHCR on change.
 
 ## Configuration

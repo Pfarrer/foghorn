@@ -35,6 +35,7 @@ These specs are ready to be implemented but have not yet been started.
 - [Check Execution History Tracking](check-execution-history.md)
 - [One-Shot Mode](one-shot-mode.md)
 - [Secret Exposure Prevention in Logs, Process Lists, and Endpoints](secret-exposure-prevention.md)
+- [Check Container Debug Output Modes](check-container-debug-output.md)
 
 ## Blocked
 No specs are currently blocked.

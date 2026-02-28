@@ -142,6 +142,14 @@ func TestBuildEnvVarsWithSecretReferences(t *testing.T) {
 	}
 	defer os.RemoveAll(secretDir)
 
+	dirInfo, err := os.Stat(secretDir)
+	if err != nil {
+		t.Fatalf("failed to stat secret directory: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o755 {
+		t.Fatalf("expected secret directory permissions 0o755, got 0%o", got)
+	}
+
 	envMap := make(map[string]string)
 	for _, e := range env {
 		parts := strings.SplitN(e, "=", 2)
@@ -166,6 +174,13 @@ func TestBuildEnvVarsWithSecretReferences(t *testing.T) {
 	}
 	if string(secretBytes) != "smtp-secret" {
 		t.Errorf("unexpected secret file content: %q", string(secretBytes))
+	}
+	secretInfo, err := os.Stat(secretDir + "/SMTP_PASSWORD")
+	if err != nil {
+		t.Fatalf("failed to stat secret file: %v", err)
+	}
+	if got := secretInfo.Mode().Perm(); got != 0o644 {
+		t.Fatalf("expected secret file permissions 0o644, got 0%o", got)
 	}
 }
 

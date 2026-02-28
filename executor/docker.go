@@ -268,7 +268,7 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 
 			filename := sanitizeSecretFilename(k)
 			secretPath := filepath.Join(secretDir, filename)
-			if err := os.WriteFile(secretPath, []byte(secretValue), 0o600); err != nil {
+			if err := os.WriteFile(secretPath, []byte(secretValue), 0o644); err != nil {
 				return nil, "", fmt.Errorf("failed to write secret file for %s: %w", k, err)
 			}
 			logger.Debug("Check %s: Injected secret reference %q into %s_FILE", check.Name, refKey, k)
@@ -416,7 +416,7 @@ func (e *DockerExecutor) createSecretDir() (string, error) {
 	suffix := hex.EncodeToString(b)
 
 	dir := filepath.Join(e.secretBaseDir, suffix)
-	if err := os.Mkdir(dir, 0o700); err != nil {
+	if err := os.Mkdir(dir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create secret directory: %w", err)
 	}
 

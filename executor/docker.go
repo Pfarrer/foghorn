@@ -255,6 +255,9 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 			if err != nil {
 				return nil, "", fmt.Errorf("check %s failed resolving secret: %w", check.Name, err)
 			}
+			if secretValue == "" {
+				return nil, "", fmt.Errorf("check %s secret %q resolved to an empty value", check.Name, refKey)
+			}
 			if secretDir == "" {
 				dir, err := e.createSecretDir()
 				if err != nil {
@@ -268,6 +271,7 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 			if err := os.WriteFile(secretPath, []byte(secretValue), 0o600); err != nil {
 				return nil, "", fmt.Errorf("failed to write secret file for %s: %w", k, err)
 			}
+			logger.Debug("Check %s: Injected secret reference %q into %s_FILE", check.Name, refKey, k)
 			env = append(env, fmt.Sprintf("%s_FILE=/run/foghorn/secrets/%s", k, filename))
 		}
 	}

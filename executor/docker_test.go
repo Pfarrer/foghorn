@@ -186,6 +186,32 @@ func TestBuildEnvVarsWithSecretReferenceMissingResolver(t *testing.T) {
 	}
 }
 
+func TestBuildEnvVarsWithEmptyResolvedSecret(t *testing.T) {
+	exec := &DockerExecutor{
+		secretResolver: &testSecretResolver{
+			values: map[string]string{
+				"secret://smtp/password": "",
+			},
+		},
+	}
+	checkConfig := &config.CheckConfig{
+		Name:    "mail-check",
+		Image:   "test-image",
+		Enabled: true,
+		Env: map[string]string{
+			"SMTP_PASSWORD": "secret://smtp/password",
+		},
+	}
+
+	_, _, err := exec.buildEnvVars(checkConfig)
+	if err == nil {
+		t.Fatal("expected error for empty resolved secret")
+	}
+	if !strings.Contains(err.Error(), "resolved to an empty value") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestNewDockerExecutor(t *testing.T) {
 	exec, err := NewDockerExecutor()
 	if err != nil {

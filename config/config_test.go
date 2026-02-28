@@ -104,6 +104,29 @@ func TestValidateRequiredFields(t *testing.T) {
 			wantErr: true,
 			errMsg:  "invalid image tag",
 		},
+		{
+			name:    "invalid global debug_output mode",
+			config:  "debug_output: noisy\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "debug_output must be one of off, on_failure, always",
+		},
+		{
+			name:    "invalid per-check debug_output mode",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    debug_output: noisy\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "debug_output must be one of off, on_failure, always",
+		},
+		{
+			name:    "negative debug output max chars",
+			config:  "debug_output_max_chars: -1\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "debug_output_max_chars cannot be negative",
+		},
+		{
+			name:    "valid debug output config",
+			config:  "debug_output: on_failure\ndebug_output_max_chars: 2048\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    debug_output: always\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

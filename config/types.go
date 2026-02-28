@@ -23,6 +23,7 @@ type CheckConfig struct {
 	Enabled     bool                   `yaml:"enabled"`
 	Env         map[string]string      `yaml:"env,omitempty"`
 	Timeout     string                 `yaml:"timeout,omitempty"`
+	DebugOutput string                 `yaml:"debug_output,omitempty"`
 	Metadata    map[string]interface{} `yaml:"metadata,omitempty"`
 }
 
@@ -34,4 +35,6 @@ type Config struct {
 	StateLogFile        string                 `yaml:"state_log_file,omitempty"`
 	StateLogPeriod      string                 `yaml:"state_log_period,omitempty"`
 	SecretStoreFile     string                 `yaml:"secret_store_file,omitempty"`
+	DebugOutput         string                 `yaml:"debug_output,omitempty"`
+	DebugOutputMaxChars int                    `yaml:"debug_output_max_chars,omitempty"`
 }

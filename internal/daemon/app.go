@@ -186,6 +186,7 @@ func Run() {
 		os.Exit(1)
 	}
 	defer dockerExecutor.Close()
+	dockerExecutor.SetDebugOutput(cfg.DebugOutput, cfg.DebugOutputMaxChars)
 
 	if configUsesSecrets(cfg) {
 		storePath := resolveSecretStorePath(secretStoreFile, cfg.SecretStoreFile)

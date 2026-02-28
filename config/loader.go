@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pfarrer/foghorn/containerimage"
@@ -89,6 +90,12 @@ func validate(cfg *Config) error {
 			return fmt.Errorf("state_log_period must be a positive duration")
 		}
 	}
+	if err := validateDebugOutputMode("config", cfg.DebugOutput); err != nil {
+		return err
+	}
+	if cfg.DebugOutputMaxChars < 0 {
+		return fmt.Errorf("debug_output_max_chars cannot be negative")
+	}
 
 	for i, check := range cfg.Checks {
 		if check.Name == "" {
@@ -106,8 +113,20 @@ func validate(cfg *Config) error {
 		if check.Schedule.Cron != "" && check.Schedule.Interval != "" {
 			return fmt.Errorf("check %s: only one of cron or interval should be specified", check.Name)
 		}
+		if err := validateDebugOutputMode(fmt.Sprintf("check %s", check.Name), check.DebugOutput); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func validateDebugOutputMode(subject string, mode string) error {
+	switch strings.TrimSpace(mode) {
+	case "", "off", "on_failure", "always":
+		return nil
+	default:
+		return fmt.Errorf("%s: debug_output must be one of off, on_failure, always", subject)
+	}
 }
 
 func decodeInto(raw map[string]interface{}, dest interface{}) error {
@@ -133,6 +152,12 @@ func mergeConfig(dst *Config, src *Config) {
 	}
 	if src.SecretStoreFile != "" {
 		dst.SecretStoreFile = src.SecretStoreFile
+	}
+	if src.DebugOutput != "" {
+		dst.DebugOutput = src.DebugOutput
+	}
+	if src.DebugOutputMaxChars != 0 {
+		dst.DebugOutputMaxChars = src.DebugOutputMaxChars
 	}
 	if len(src.Global) > 0 {
 		if dst.Global == nil {

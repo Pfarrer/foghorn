@@ -23,8 +23,10 @@ Add configurable debug log output for check containers to simplify troubleshooti
   - no secret leaks in logged debug output
 
 ## Acceptance Criteria
-- [ ] Config supports `debug_output: off|on_failure|always` globally and per check.
-- [ ] `on_failure` logs redacted container output only when check run fails.
-- [ ] `always` logs redacted container output for every check run.
-- [ ] Logged output is truncated to configured maximum size.
-- [ ] Tests verify mode behavior and secret redaction.
+- [x] Config supports `debug_output: off|on_failure|always` globally and per check.
+- [x] `on_failure` logs redacted container output only when check run fails.
+- [x] `always` logs redacted container output for every check run.
+- [x] Logged output is truncated to configured maximum size.
+- [x] Tests verify mode behavior and secret redaction.
+
+Passes: true

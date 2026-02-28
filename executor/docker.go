@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,9 +42,17 @@ type DockerExecutor struct {
 	resolvedImages map[string]string
 	secretResolver SecretResolver
 	secretBaseDir  string
+	debugOutput    string
+	debugMaxChars  int
 }
 
-const maxFailureLogChars = 4096
+const (
+	debugOutputModeOff       = "off"
+	debugOutputModeOnFailure = "on_failure"
+	debugOutputModeAlways    = "always"
+	defaultDebugOutputMode   = debugOutputModeOff
+	defaultDebugOutputMax    = 4096
+)
 
 type SecretResolver interface {
 	Resolve(ref string) (string, error)
@@ -75,6 +84,8 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 		outputLocation: "stdout",
 		resolvedImages: make(map[string]string),
 		secretBaseDir:  secretBaseDir,
+		debugOutput:    defaultDebugOutputMode,
+		debugMaxChars:  defaultDebugOutputMax,
 	}, nil
 }
 
@@ -120,7 +131,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	logger.Debug("Check %s: Creating container with image %s (timeout: %v)", checkName, image, timeout)
 
-	env, secretDir, err := e.buildEnvVars(checkConfig)
+	env, secretDir, secretsToRedact, err := e.buildEnvVars(checkConfig)
 	if err != nil {
 		duration := time.Since(startTime)
 		if e.resultCallback != nil {
@@ -131,6 +142,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	}
 	if secretDir != "" {
 		defer cleanupSecretDir(secretDir)
+	}
+
+	debugMode := normalizeDebugOutputMode(checkConfig.DebugOutput)
+	if debugMode == "" {
+		debugMode = e.debugOutput
 	}
 
 	containerConfig := &container.Config{
@@ -172,15 +188,10 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	select {
 	case statusResult := <-statusCh:
 		if statusResult.StatusCode != 0 {
-			debugCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			failureOutput, logErr := e.readContainerOutput(debugCtx, resp.ID, true, true)
-			cancel()
-			if logErr != nil {
-				logger.Debug("Check %s: Failed to read container output after non-zero exit: %v", checkName, logErr)
-			} else if failureOutput == "" {
-				logger.Debug("Check %s: Container output on failure was empty", checkName)
-			} else {
-				logger.Debug("Check %s: Container output on failure:\n%s", checkName, truncateLogOutput(failureOutput, maxFailureLogChars))
+			if shouldLogContainerDebugOutput(debugMode, true) {
+				if err := e.logContainerDebugOutput(checkName, resp.ID, "failure", secretsToRedact); err != nil {
+					logger.Debug("Check %s: Failed to read container output after failure: %v", checkName, err)
+				}
 			}
 
 			duration := time.Since(startTime)
@@ -203,6 +214,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		if e.resultCallback != nil {
 			e.resultCallback(checkName, result.Status, duration)
 		}
+		if shouldLogContainerDebugOutput(debugMode, false) {
+			if err := e.logContainerDebugOutput(checkName, resp.ID, "success", secretsToRedact); err != nil {
+				logger.Debug("Check %s: Failed to read container output after success: %v", checkName, err)
+			}
+		}
 		logger.Info("Check %s: Completed with status %s (duration: %dms) - %s", checkName, result.Status, result.DurationMs, result.Message)
 		return nil
 	case err := <-errCh:
@@ -223,10 +239,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	}
 }
 
-func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, string, error) {
+func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, string, []string, error) {
 	env := []string{
 		fmt.Sprintf("FOGHORN_CHECK_NAME=%s", check.Name),
 	}
+	secretsToRedact := make([]string, 0)
 
 	if check.Metadata != nil {
 		configJSON, err := json.Marshal(check.Metadata)
@@ -248,20 +265,20 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 	for k, v := range check.Env {
 		if refKey, ok := secretstore.ParseRef(v); ok {
 			if e.secretResolver == nil {
-				return nil, "", fmt.Errorf("check %s requires secret %q, but secret store is not configured", check.Name, refKey)
+				return nil, "", nil, fmt.Errorf("check %s requires secret %q, but secret store is not configured", check.Name, refKey)
 			}
 
 			secretValue, err := e.secretResolver.Resolve(v)
 			if err != nil {
-				return nil, "", fmt.Errorf("check %s failed resolving secret: %w", check.Name, err)
+				return nil, "", nil, fmt.Errorf("check %s failed resolving secret: %w", check.Name, err)
 			}
 			if secretValue == "" {
-				return nil, "", fmt.Errorf("check %s secret %q resolved to an empty value", check.Name, refKey)
+				return nil, "", nil, fmt.Errorf("check %s secret %q resolved to an empty value", check.Name, refKey)
 			}
 			if secretDir == "" {
 				dir, err := e.createSecretDir()
 				if err != nil {
-					return nil, "", fmt.Errorf("failed to create temporary secret directory: %w", err)
+					return nil, "", nil, fmt.Errorf("failed to create temporary secret directory: %w", err)
 				}
 				secretDir = dir
 			}
@@ -269,10 +286,11 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 			filename := sanitizeSecretFilename(k)
 			secretPath := filepath.Join(secretDir, filename)
 			if err := os.WriteFile(secretPath, []byte(secretValue), 0o644); err != nil {
-				return nil, "", fmt.Errorf("failed to write secret file for %s: %w", k, err)
+				return nil, "", nil, fmt.Errorf("failed to write secret file for %s: %w", k, err)
 			}
 			logger.Debug("Check %s: Injected secret reference %q into %s_FILE", check.Name, refKey, k)
 			env = append(env, fmt.Sprintf("%s_FILE=/run/foghorn/secrets/%s", k, filename))
+			secretsToRedact = append(secretsToRedact, secretValue)
 		}
 	}
 
@@ -285,7 +303,7 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 		}
 	}
 
-	return env, secretDir, nil
+	return env, secretDir, secretsToRedact, nil
 }
 
 func demultiplexLogs(data []byte) []byte {
@@ -309,7 +327,69 @@ func truncateLogOutput(output string, maxChars int) string {
 	if maxChars <= 0 || len(output) <= maxChars {
 		return output
 	}
-	return output[:maxChars] + "\n... (truncated)"
+	return "... (truncated, showing tail)\n" + output[len(output)-maxChars:]
+}
+
+func normalizeDebugOutputMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case debugOutputModeOff, debugOutputModeOnFailure, debugOutputModeAlways:
+		return strings.TrimSpace(mode)
+	default:
+		return ""
+	}
+}
+
+func shouldLogContainerDebugOutput(mode string, failed bool) bool {
+	switch normalizeDebugOutputMode(mode) {
+	case debugOutputModeAlways:
+		return true
+	case debugOutputModeOnFailure:
+		return failed
+	default:
+		return false
+	}
+}
+
+var (
+	authHeaderPattern  = regexp.MustCompile(`(?im)(authorization\s*[:=]\s*)([^\r\n]+)`)
+	credentialPattern  = regexp.MustCompile(`(?im)(\"?(?:password|passwd|token|secret|api[_-]?key|authorization)\"?\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,}]+)`)
+	bearerTokenPattern = regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*`)
+)
+
+func redactContainerOutput(output string, secrets []string) string {
+	redacted := output
+	uniqueSecrets := make([]string, 0, len(secrets))
+	for _, secret := range secrets {
+		if secret == "" {
+			continue
+		}
+		if !slices.Contains(uniqueSecrets, secret) {
+			uniqueSecrets = append(uniqueSecrets, secret)
+		}
+	}
+	for _, secret := range uniqueSecrets {
+		redacted = strings.ReplaceAll(redacted, secret, "[REDACTED]")
+	}
+	redacted = authHeaderPattern.ReplaceAllString(redacted, "${1}[REDACTED]")
+	redacted = credentialPattern.ReplaceAllString(redacted, "${1}[REDACTED]")
+	redacted = bearerTokenPattern.ReplaceAllString(redacted, "Bearer [REDACTED]")
+	return redacted
+}
+
+func (e *DockerExecutor) logContainerDebugOutput(checkName string, containerID string, reason string, secretsToRedact []string) error {
+	debugCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	output, err := e.readContainerOutput(debugCtx, containerID, true, true)
+	cancel()
+	if err != nil {
+		return err
+	}
+	if output == "" {
+		logger.Debug("Check %s: Container output on %s was empty", checkName, reason)
+		return nil
+	}
+	redacted := redactContainerOutput(output, secretsToRedact)
+	logger.Debug("Check %s: Container output on %s:\n%s", checkName, reason, truncateLogOutput(redacted, e.debugMaxChars))
+	return nil
 }
 
 func (e *DockerExecutor) readContainerOutput(ctx context.Context, containerID string, showStdout bool, showStderr bool) (string, error) {
@@ -376,6 +456,19 @@ func (e *DockerExecutor) SetResultCallback(callback func(checkName string, statu
 
 func (e *DockerExecutor) SetSecretResolver(resolver SecretResolver) {
 	e.secretResolver = resolver
+}
+
+func (e *DockerExecutor) SetDebugOutput(mode string, maxChars int) {
+	normalized := normalizeDebugOutputMode(mode)
+	if normalized == "" {
+		normalized = defaultDebugOutputMode
+	}
+	e.debugOutput = normalized
+	if maxChars > 0 {
+		e.debugMaxChars = maxChars
+		return
+	}
+	e.debugMaxChars = defaultDebugOutputMax
 }
 
 var nonFileSafeChars = regexp.MustCompile(`[^A-Za-z0-9._-]`)

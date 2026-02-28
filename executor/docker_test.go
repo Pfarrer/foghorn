@@ -61,12 +61,15 @@ func TestBuildEnvVars(t *testing.T) {
 		},
 	}
 
-	env, secretDir, err := exec.buildEnvVars(checkConfig)
+	env, secretDir, secretsToRedact, err := exec.buildEnvVars(checkConfig)
 	if err != nil {
 		t.Fatalf("buildEnvVars failed: %v", err)
 	}
 	if secretDir != "" {
 		t.Fatalf("did not expect secret directory, got %s", secretDir)
+	}
+	if len(secretsToRedact) != 0 {
+		t.Fatalf("did not expect secrets to redact, got %d", len(secretsToRedact))
 	}
 
 	envMap := make(map[string]string)
@@ -133,7 +136,7 @@ func TestBuildEnvVarsWithSecretReferences(t *testing.T) {
 		},
 	}
 
-	env, secretDir, err := exec.buildEnvVars(checkConfig)
+	env, secretDir, secretsToRedact, err := exec.buildEnvVars(checkConfig)
 	if err != nil {
 		t.Fatalf("buildEnvVars failed: %v", err)
 	}
@@ -167,6 +170,9 @@ func TestBuildEnvVarsWithSecretReferences(t *testing.T) {
 	if envMap["SMTP_HOST"] != "smtp.example.com" {
 		t.Errorf("expected SMTP_HOST to be passed through, got %q", envMap["SMTP_HOST"])
 	}
+	if len(secretsToRedact) != 1 || secretsToRedact[0] != "smtp-secret" {
+		t.Fatalf("unexpected secretsToRedact: %#v", secretsToRedact)
+	}
 
 	secretBytes, err := os.ReadFile(secretDir + "/SMTP_PASSWORD")
 	if err != nil {
@@ -195,7 +201,7 @@ func TestBuildEnvVarsWithSecretReferenceMissingResolver(t *testing.T) {
 		},
 	}
 
-	_, _, err := exec.buildEnvVars(checkConfig)
+	_, _, _, err := exec.buildEnvVars(checkConfig)
 	if err == nil {
 		t.Fatal("expected error for missing secret resolver")
 	}
@@ -218,7 +224,7 @@ func TestBuildEnvVarsWithEmptyResolvedSecret(t *testing.T) {
 		},
 	}
 
-	_, _, err := exec.buildEnvVars(checkConfig)
+	_, _, _, err := exec.buildEnvVars(checkConfig)
 	if err == nil {
 		t.Fatal("expected error for empty resolved secret")
 	}
@@ -430,10 +436,10 @@ func TestTruncateLogOutput(t *testing.T) {
 			want:     "hello",
 		},
 		{
-			name:     "truncate with marker",
-			input:    "abcdefghij",
+			name:     "truncate keeps tail with marker",
+			input:    "abcdefghijklmnopqrstuvwxyz",
 			maxChars: 5,
-			want:     "abcde\n... (truncated)",
+			want:     "... (truncated, showing tail)\nvwxyz",
 		},
 	}
 
@@ -444,5 +450,52 @@ func TestTruncateLogOutput(t *testing.T) {
 				t.Errorf("truncateLogOutput() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestShouldLogContainerDebugOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		mode   string
+		failed bool
+		want   bool
+	}{
+		{name: "off on success", mode: "off", failed: false, want: false},
+		{name: "off on failure", mode: "off", failed: true, want: false},
+		{name: "on_failure on success", mode: "on_failure", failed: false, want: false},
+		{name: "on_failure on failure", mode: "on_failure", failed: true, want: true},
+		{name: "always on success", mode: "always", failed: false, want: true},
+		{name: "always on failure", mode: "always", failed: true, want: true},
+		{name: "invalid mode defaults to off", mode: "nope", failed: true, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldLogContainerDebugOutput(tt.mode, tt.failed)
+			if got != tt.want {
+				t.Fatalf("shouldLogContainerDebugOutput(%q, %v) = %v, want %v", tt.mode, tt.failed, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRedactContainerOutput(t *testing.T) {
+	logOutput := strings.Join([]string{
+		"SMTP_PASSWORD=super-secret",
+		"Authorization: Bearer abc.def.ghi",
+		`{"token":"abc123"}`,
+		"plain super-secret appears again",
+	}, "\n")
+
+	redacted := redactContainerOutput(logOutput, []string{"super-secret"})
+
+	unwanted := []string{"super-secret", "abc.def.ghi", "abc123"}
+	for _, s := range unwanted {
+		if strings.Contains(redacted, s) {
+			t.Fatalf("redacted output still contains %q: %s", s, redacted)
+		}
+	}
+	if !strings.Contains(redacted, "[REDACTED]") {
+		t.Fatalf("redacted output should contain marker, got: %s", redacted)
 	}
 }

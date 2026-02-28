@@ -90,7 +90,7 @@ func validate(cfg *Config) error {
 			return fmt.Errorf("state_log_period must be a positive duration")
 		}
 	}
-	if err := validateDebugOutputMode("config", cfg.DebugOutput); err != nil {
+	if err := validateDebugOutputMode("config", cfg.CheckContainerDebugOutput); err != nil {
 		return err
 	}
 	if cfg.DebugOutputMaxChars < 0 {
@@ -113,7 +113,7 @@ func validate(cfg *Config) error {
 		if check.Schedule.Cron != "" && check.Schedule.Interval != "" {
 			return fmt.Errorf("check %s: only one of cron or interval should be specified", check.Name)
 		}
-		if err := validateDebugOutputMode(fmt.Sprintf("check %s", check.Name), check.DebugOutput); err != nil {
+		if err := validateDebugOutputMode(fmt.Sprintf("check %s", check.Name), check.CheckContainerDebugOutput); err != nil {
 			return err
 		}
 	}
@@ -125,7 +125,7 @@ func validateDebugOutputMode(subject string, mode string) error {
 	case "", "off", "on_failure", "always":
 		return nil
 	default:
-		return fmt.Errorf("%s: debug_output must be one of off, on_failure, always", subject)
+		return fmt.Errorf("%s: check_container_debug_output must be one of off, on_failure, always", subject)
 	}
 }
 
@@ -153,8 +153,8 @@ func mergeConfig(dst *Config, src *Config) {
 	if src.SecretStoreFile != "" {
 		dst.SecretStoreFile = src.SecretStoreFile
 	}
-	if src.DebugOutput != "" {
-		dst.DebugOutput = src.DebugOutput
+	if src.CheckContainerDebugOutput != "" {
+		dst.CheckContainerDebugOutput = src.CheckContainerDebugOutput
 	}
 	if src.DebugOutputMaxChars != 0 {
 		dst.DebugOutputMaxChars = src.DebugOutputMaxChars

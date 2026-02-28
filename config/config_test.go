@@ -105,16 +105,16 @@ func TestValidateRequiredFields(t *testing.T) {
 			errMsg:  "invalid image tag",
 		},
 		{
-			name:    "invalid global debug_output mode",
-			config:  "debug_output: noisy\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			name:    "invalid global check_container_debug_output mode",
+			config:  "check_container_debug_output: noisy\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: true,
-			errMsg:  "debug_output must be one of off, on_failure, always",
+			errMsg:  "check_container_debug_output must be one of off, on_failure, always",
 		},
 		{
-			name:    "invalid per-check debug_output mode",
-			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    debug_output: noisy\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			name:    "invalid per-check check_container_debug_output mode",
+			config:  "checks:\n  - name: test\n    image: test/image:1.0.0\n    check_container_debug_output: noisy\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: true,
-			errMsg:  "debug_output must be one of off, on_failure, always",
+			errMsg:  "check_container_debug_output must be one of off, on_failure, always",
 		},
 		{
 			name:    "negative debug output max chars",
@@ -124,7 +124,7 @@ func TestValidateRequiredFields(t *testing.T) {
 		},
 		{
 			name:    "valid debug output config",
-			config:  "debug_output: on_failure\ndebug_output_max_chars: 2048\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    debug_output: always\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			config:  "check_container_debug_output: on_failure\ndebug_output_max_chars: 2048\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    check_container_debug_output: always\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: false,
 		},
 	}

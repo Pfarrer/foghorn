@@ -53,6 +53,25 @@ json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+debug_log() {
+    printf '[DEBUG] %s\n' "$1"
+}
+
+debug_curl_error() {
+    step="$1"
+    exit_code="$2"
+    err_file="$3"
+    if [ -f "$err_file" ]; then
+        err_msg="$(tr '\n' ' ' <"$err_file" | sed 's/[[:space:]]\+/ /g')"
+    else
+        err_msg=""
+    fi
+    if [ -z "$err_msg" ]; then
+        err_msg="(no stderr output)"
+    fi
+    printf '[DEBUG] %s failed (exit=%s): %s\n' "$step" "$exit_code" "$err_msg"
+}
+
 json_output() {
     status="$1"
     message="$2"
@@ -241,6 +260,9 @@ if [ -n "$FOGHORN_TIMEOUT_SECONDS" ] && [ "$FOGHORN_TIMEOUT_SECONDS" -lt "$EFFEC
 fi
 
 END_DEADLINE_EPOCH="$((START_TIME_EPOCH + EFFECTIVE_DEADLINE_SECONDS))"
+debug_log "Configuration validated"
+debug_log "SMTP target ${SMTP_HOST}:${SMTP_PORT} (tls_mode=${SMTP_TLS_MODE}), IMAP target ${RECEIVE_HOST}:${RECEIVE_PORT} (tls=${RECEIVE_TLS})"
+debug_log "Timing: deadline=${EFFECTIVE_DEADLINE_SECONDS}s, poll_interval=${POLL_INTERVAL_SECONDS}s, warning_threshold=${WARNING_THRESHOLD_SECONDS:-none}"
 
 RANDOM_HEX="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
 if [ -z "$RANDOM_HEX" ]; then
@@ -253,8 +275,13 @@ SEND_TIME_ISO="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 MAIL_DATE="$(LC_ALL=C date -u +"%a, %d %b %Y %H:%M:%S +0000")"
 
 MESSAGE_FILE="$(mktemp)"
+SMTP_ERR_FILE="$(mktemp)"
+SEARCH_ERR_FILE="$(mktemp)"
+FETCH_ERR_FILE="$(mktemp)"
+DELETE_ERR_FILE="$(mktemp)"
 cleanup() {
     rm -f "$MESSAGE_FILE"
+    rm -f "$SMTP_ERR_FILE" "$SEARCH_ERR_FILE" "$FETCH_ERR_FILE" "$DELETE_ERR_FILE"
 }
 trap cleanup EXIT
 
@@ -293,28 +320,33 @@ if [ "$SECONDS_LEFT" -le 0 ]; then
     emit_fail "deadline exceeded before send started"
 fi
 
+debug_log "Sending probe message (correlation_id=${CORRELATION_ID}) with timeout=${SECONDS_LEFT}s"
 set +e
 if [ -n "$SMTP_SSL_FLAG" ]; then
+    : >"$SMTP_ERR_FILE"
     curl --silent --show-error --max-time "$SECONDS_LEFT" --connect-timeout 10 \
         --url "$SMTP_URL" \
         --user "${SMTP_USERNAME}:${SMTP_PASSWORD}" \
         --mail-from "$MAIL_FROM" \
         --mail-rcpt "$MAIL_TO" \
         --upload-file "$MESSAGE_FILE" \
-        $SMTP_SSL_FLAG >/dev/null 2>&1
+        $SMTP_SSL_FLAG >/dev/null 2>"$SMTP_ERR_FILE"
 else
+    : >"$SMTP_ERR_FILE"
     curl --silent --show-error --max-time "$SECONDS_LEFT" --connect-timeout 10 \
         --url "$SMTP_URL" \
         --user "${SMTP_USERNAME}:${SMTP_PASSWORD}" \
         --mail-from "$MAIL_FROM" \
         --mail-rcpt "$MAIL_TO" \
-        --upload-file "$MESSAGE_FILE" >/dev/null 2>&1
+        --upload-file "$MESSAGE_FILE" >/dev/null 2>"$SMTP_ERR_FILE"
 fi
 SMTP_EXIT=$?
 set -e
 if [ "$SMTP_EXIT" -ne 0 ]; then
+    debug_curl_error "SMTP send" "$SMTP_EXIT" "$SMTP_ERR_FILE"
     emit_fail "failed to send mail via SMTP"
 fi
+debug_log "SMTP send succeeded"
 
 SEND_EPOCH="$(date +%s)"
 
@@ -326,8 +358,10 @@ fi
 
 FOUND_UID=""
 FOUND_RECEIVE_TIME=""
+ATTEMPT=0
 
 while :; do
+    ATTEMPT=$((ATTEMPT + 1))
     NOW_EPOCH="$(date +%s)"
     SECONDS_LEFT="$((END_DEADLINE_EPOCH - NOW_EPOCH))"
     if [ "$SECONDS_LEFT" -le 0 ]; then
@@ -339,14 +373,17 @@ while :; do
         SEARCH_TIMEOUT=15
     fi
 
+    debug_log "IMAP poll attempt=${ATTEMPT} timeout=${SEARCH_TIMEOUT}s"
     set +e
+    : >"$SEARCH_ERR_FILE"
     SEARCH_OUTPUT="$(curl --silent --show-error --max-time "$SEARCH_TIMEOUT" --connect-timeout 10 \
         --url "$IMAP_URL" \
         --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-        -X "UID SEARCH HEADER SUBJECT \"${CORRELATION_ID}\"" 2>/dev/null)"
+        -X "UID SEARCH HEADER SUBJECT \"${CORRELATION_ID}\"" 2>"$SEARCH_ERR_FILE")"
     SEARCH_EXIT=$?
     set -e
     if [ "$SEARCH_EXIT" -ne 0 ]; then
+        debug_curl_error "IMAP search" "$SEARCH_EXIT" "$SEARCH_ERR_FILE"
         emit_fail "failed to query IMAP mailbox"
     fi
 
@@ -364,12 +401,16 @@ while :; do
 
         PARSED_RECEIVE_EPOCH=""
         set +e
+        : >"$FETCH_ERR_FILE"
         FETCH_OUTPUT="$(curl --silent --show-error --max-time "$FETCH_TIMEOUT" --connect-timeout 10 \
             --url "$IMAP_URL" \
             --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-            -X "UID FETCH ${FOUND_UID} (INTERNALDATE)" 2>/dev/null)"
+            -X "UID FETCH ${FOUND_UID} (INTERNALDATE)" 2>"$FETCH_ERR_FILE")"
         FETCH_EXIT=$?
         set -e
+        if [ "$FETCH_EXIT" -ne 0 ]; then
+            debug_curl_error "IMAP fetch INTERNALDATE" "$FETCH_EXIT" "$FETCH_ERR_FILE"
+        fi
         if [ "$FETCH_EXIT" -eq 0 ]; then
             INTERNAL_DATE="$(printf '%s\n' "$FETCH_OUTPUT" | sed -n 's/.*INTERNALDATE \"\([^\"]*\)\".*/\1/p' | head -n 1)"
             if [ -n "$INTERNAL_DATE" ]; then
@@ -378,6 +419,7 @@ while :; do
         fi
 
         if [ -n "$PARSED_RECEIVE_EPOCH" ] && [ "$PARSED_RECEIVE_EPOCH" -lt "$START_TIME_EPOCH" ]; then
+            debug_log "Ignoring old matching message uid=${FOUND_UID} internaldate_epoch=${PARSED_RECEIVE_EPOCH}"
             FOUND_UID=""
         else
             if [ -z "$PARSED_RECEIVE_EPOCH" ]; then
@@ -388,17 +430,28 @@ while :; do
                 DELIVERY_SECONDS=0
             fi
             FOUND_RECEIVE_TIME="$(date -u -d "@${PARSED_RECEIVE_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            debug_log "Matched message uid=${FOUND_UID} delivery_seconds=${DELIVERY_SECONDS}"
 
             if [ "$DELETE_AFTER_MATCH" = "true" ]; then
                 set +e
+                : >"$DELETE_ERR_FILE"
                 curl --silent --show-error --max-time 10 --connect-timeout 5 \
                     --url "$IMAP_URL" \
                     --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-                    -X "UID STORE ${FOUND_UID} +FLAGS.SILENT (\\Deleted)" >/dev/null 2>&1
+                    -X "UID STORE ${FOUND_UID} +FLAGS.SILENT (\\Deleted)" >/dev/null 2>"$DELETE_ERR_FILE"
+                DELETE_STORE_EXIT=$?
+                if [ "$DELETE_STORE_EXIT" -ne 0 ]; then
+                    debug_curl_error "IMAP delete marker" "$DELETE_STORE_EXIT" "$DELETE_ERR_FILE"
+                fi
+                : >"$DELETE_ERR_FILE"
                 curl --silent --show-error --max-time 10 --connect-timeout 5 \
                     --url "$IMAP_URL" \
                     --user "${RECEIVE_USERNAME}:${RECEIVE_PASSWORD}" \
-                    -X "EXPUNGE" >/dev/null 2>&1
+                    -X "EXPUNGE" >/dev/null 2>"$DELETE_ERR_FILE"
+                DELETE_EXPUNGE_EXIT=$?
+                if [ "$DELETE_EXPUNGE_EXIT" -ne 0 ]; then
+                    debug_curl_error "IMAP expunge" "$DELETE_EXPUNGE_EXIT" "$DELETE_ERR_FILE"
+                fi
                 set -e
             fi
 
@@ -416,6 +469,7 @@ while :; do
     if [ "$SLEEP_FOR" -gt "$SECONDS_LEFT" ]; then
         SLEEP_FOR="$SECONDS_LEFT"
     fi
+    debug_log "No match yet, sleeping ${SLEEP_FOR}s"
     sleep "$SLEEP_FOR"
 done
 
@@ -423,9 +477,11 @@ END_TIME_MS="$(now_ms)"
 DURATION_MS="$((END_TIME_MS - START_TIME_MS))"
 
 if [ -n "$WARNING_THRESHOLD_SECONDS" ] && [ "$DELIVERY_SECONDS" -gt "$WARNING_THRESHOLD_SECONDS" ]; then
+    debug_log "Completed with warn status"
     json_output "warn" "mail delivered in ${DELIVERY_SECONDS}s (warning threshold ${WARNING_THRESHOLD_SECONDS}s)" "$DURATION_MS" "$FOUND_RECEIVE_TIME"
     exit 0
 fi
 
+debug_log "Completed with pass status"
 json_output "pass" "mail delivered in ${DELIVERY_SECONDS}s" "$DURATION_MS" "$FOUND_RECEIVE_TIME"
 exit 0

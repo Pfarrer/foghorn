@@ -144,7 +144,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		defer cleanupSecretDir(secretDir)
 	}
 
-	debugMode := normalizeDebugOutputMode(checkConfig.DebugOutput)
+	debugMode := normalizeDebugOutputMode(checkConfig.CheckContainerDebugOutput)
 	if debugMode == "" {
 		debugMode = e.debugOutput
 	}

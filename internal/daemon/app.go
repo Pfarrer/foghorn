@@ -65,7 +65,12 @@ func Run() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Foghorn Daemon - Service Monitoring Tool\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: foghorn-daemon [OPTIONS]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  foghorn-daemon [OPTIONS]\n")
+		fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [OPTIONS] <COMMAND> [ARGS]\n\n")
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  secret\n")
+		fmt.Fprintf(os.Stderr, "      Manage encrypted secrets (run `foghorn-daemon secret --help`)\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -c, --config <path>\n")
 		fmt.Fprintf(os.Stderr, "      Path to configuration file\n")
@@ -256,21 +261,30 @@ func runSecretCLI(args []string) int {
 		storePathArg  string
 		configPathArg string
 		valueArg      string
+		help          bool
 	)
-	fs.StringVar(&storePathArg, "store", "", "Path to encrypted secret store file")
+	fs.StringVar(&storePathArg, "s", "", "Path to encrypted secret store file")
 	fs.StringVar(&storePathArg, "secret-store-file", "", "Path to encrypted secret store file")
 	fs.StringVar(&configPathArg, "c", "", "Path to configuration file")
 	fs.StringVar(&configPathArg, "config", "", "Path to configuration file")
 	fs.StringVar(&valueArg, "value", "", "Secret value (avoid this flag in shared environments)")
+	fs.BoolVar(&help, "h", false, "Show help message")
+	fs.BoolVar(&help, "help", false, "Show help message")
+	fs.Usage = printSecretUsage
 
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		printSecretUsage()
 		return 1
 	}
+	if help {
+		printSecretUsage()
+		return 0
+	}
 
 	parts := fs.Args()
 	if len(parts) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: secret command is required\n")
 		printSecretUsage()
 		return 1
 	}
@@ -346,13 +360,29 @@ func runSecretCLI(args []string) int {
 }
 
 func printSecretUsage() {
+	fmt.Fprintf(os.Stderr, "Foghorn Secret Management\n\n")
 	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] list\n")
-	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] [--value <val>] set <key>\n")
-	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] [--value <val>] rotate <key>\n")
-	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [--store <path>] [--config <path>] delete <key>\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [OPTIONS] list\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [OPTIONS] [--value <val>] set <key>\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [OPTIONS] [--value <val>] rotate <key>\n")
+	fmt.Fprintf(os.Stderr, "  foghorn-daemon secret [OPTIONS] delete <key>\n\n")
+	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  list            List secret keys\n")
+	fmt.Fprintf(os.Stderr, "  set <key>       Create or update a secret value\n")
+	fmt.Fprintf(os.Stderr, "  rotate <key>    Rotate a secret value (same behavior as set)\n")
+	fmt.Fprintf(os.Stderr, "  delete <key>    Delete a secret key\n\n")
+	fmt.Fprintf(os.Stderr, "Options:\n")
+	fmt.Fprintf(os.Stderr, "  -c, --config <path>\n")
+	fmt.Fprintf(os.Stderr, "      Path to configuration file (used to resolve secret_store_file)\n")
+	fmt.Fprintf(os.Stderr, "  -s, --secret-store-file <path>\n")
+	fmt.Fprintf(os.Stderr, "      Path to encrypted secret store file\n")
+	fmt.Fprintf(os.Stderr, "  --value <val>\n")
+	fmt.Fprintf(os.Stderr, "      Secret value (avoid this flag in shared environments)\n")
+	fmt.Fprintf(os.Stderr, "  -h, --help\n")
+	fmt.Fprintf(os.Stderr, "      Show help message\n")
 	fmt.Fprintf(os.Stderr, "Notes:\n")
 	fmt.Fprintf(os.Stderr, "  - Set/rotate reads value from stdin when --value is omitted.\n")
+	fmt.Fprintf(os.Stderr, "  - Secret store path precedence: --secret-store-file, config, FOGHORN_SECRET_STORE_FILE, default path.\n")
 	fmt.Fprintf(os.Stderr, "  - Requires FOGHORN_SECRET_MASTER_KEY in environment.\n")
 }
 

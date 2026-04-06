@@ -229,6 +229,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		logger.Error("Check %s: Error waiting for container: %v", checkName, err)
 		return fmt.Errorf("error waiting for container: %w", err)
 	case <-ctx.Done():
+		if shouldLogContainerDebugOutput(debugMode, true) {
+			if err := e.logContainerDebugOutput(checkName, resp.ID, "timeout", secretsToRedact); err != nil {
+				logger.Debug("Check %s: Failed to read container output after timeout: %v", checkName, err)
+			}
+		}
 		duration := time.Since(startTime)
 		if e.resultCallback != nil {
 			e.resultCallback(checkName, "error", duration)

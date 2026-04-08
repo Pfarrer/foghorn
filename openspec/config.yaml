@@ -1,20 +1,48 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Project: Foghorn — a service monitoring tool that executes arbitrary Docker containers as health checks on a schedule.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Tech stack: Go 1.24, Docker Engine API (docker/docker), Bubble Tea TUI (charmbracelet), YAML config (gopkg.in/yaml.v3), golang.org/x/crypto (encrypted secret store).
+
+  Architecture:
+  - Daemon (cmd/foghorn-daemon): Loads YAML config, starts scheduler, runs checks via Docker executor, serves status API.
+  - TUI client (cmd/foghorn-tui): Connects to daemon status API and displays a terminal dashboard.
+  - Scheduler (scheduler/): Manages cron and interval-based check scheduling with concurrency control and execution history.
+  - Executor (executor/): Runs Docker containers as checks, parses JSON output, handles timeouts, injects secrets via ephemeral files.
+  - Config (config/): YAML config loading and types for checks, schedules, evaluation rules.
+  - State (state/): Persistent state log file with file locking for check results.
+  - Secret store (secretstore/): Encrypted at-rest secret storage, resolved at runtime only.
+  - Image resolver (imageresolver/): Resolves semver container image tags to available local images.
+  - Check containers (containers/): disk-check, http-check, openssl-check, mail-send-receive-check — each a standalone Docker container outputting JSON.
+  - Status API (internal/statusapi/): HTTP endpoint serving current check statuses.
+  - Daemon internals (internal/daemon/): Daemon orchestration logic.
+
+  Check interface contract:
+  - Containers receive env vars: FOGHORN_CHECK_NAME, FOGHORN_CHECK_CONFIG, FOGHORN_ENDPOINT, FOGHORN_TIMEOUT.
+  - Secrets injected via _FILE env vars pointing to files at /run/foghorn/secrets.
+  - Containers output JSON to stdout: {status, message, data, timestamp, duration_ms}.
+  - Status values: pass, fail, warn, unknown.
+  - Non-zero exit code = check failure.
+
+  Config format: YAML with checks defined as document-per-check (--- separated) or as a list under `checks:`. Each check has name, image, schedule (cron or interval), evaluation rules, env vars, timeout, enabled flag.
+
+  Conventions:
+  - All documentation must be concise and short.
+  - Test coverage is critical — always verify: code compiles, no warnings, all tests pass.
+  - Spec status tracked in specs/STATUS.md.
+  - Legacy specs live in specs/ with a specific format (Category, Description, Usage Steps, Implementation Notes, Acceptance Criteria, Passes field).
+  - All new specs must be created using the OpenSpec workflow in openspec/ (proposals, specs, tasks). Do not add new specs to the legacy specs/ directory.
+  - Standard Go project layout with packages by domain.
+  - No comments in code unless requested.
+
+rules:
+  proposal:
+    - Keep proposals concise and direct.
+    - Reference existing specs in specs/ where relevant.
+  tasks:
+    - Each task should be implementable in under 2 hours.
+    - Always include verification steps (build, test).
+  spec:
+    - Follow the existing spec format from specs/template.md.
+    - Include Category, Description, Usage Steps, Implementation Notes, Acceptance Criteria.

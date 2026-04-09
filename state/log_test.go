@@ -56,6 +56,63 @@ func TestLatestByCheck(t *testing.T) {
 	}
 }
 
+func TestExclusiveLockAcquiredOnOpen(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "state.log")
+
+	log, err := Open(path, time.Hour)
+	if err != nil {
+		t.Fatalf("open state log: %v", err)
+	}
+	defer log.Close()
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open file for lock check: %v", err)
+	}
+	defer file.Close()
+
+	if log.lockFile == nil {
+		t.Fatal("expected lockFile to be set after Open")
+	}
+}
+
+func TestSecondInstanceRejected(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "state.log")
+
+	log1, err := Open(path, time.Hour)
+	if err != nil {
+		t.Fatalf("open first state log: %v", err)
+	}
+	defer log1.Close()
+
+	_, err = Open(path, time.Hour)
+	if err == nil {
+		t.Fatal("expected error when opening locked state log from second instance")
+	}
+}
+
+func TestLockReleasedOnClose(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "state.log")
+
+	log1, err := Open(path, time.Hour)
+	if err != nil {
+		t.Fatalf("open state log: %v", err)
+	}
+
+	if err := log1.Close(); err != nil {
+		t.Fatalf("close state log: %v", err)
+	}
+
+	log2, err := Open(path, time.Hour)
+	if err != nil {
+		t.Fatalf("expected to re-open state log after close: %v", err)
+	}
+	defer log2.Close()
+}
+
 func TestLoadCorruptStateLog(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "state.log")

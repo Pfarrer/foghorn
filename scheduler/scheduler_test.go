@@ -807,6 +807,108 @@ func TestMixedCronAndIntervalScheduling(t *testing.T) {
 	}
 }
 
+func TestCheckFiresWhenNextRunReached(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	check := &MockCheckConfig{
+		name:     "fire-check",
+		schedule: "* * * * *",
+		enabled:  true,
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	checkStatus, _ := scheduler.GetCheckStatus("fire-check")
+	checkStatus.NextRun = time.Now().UTC()
+
+	scheduler.Start(10 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
+	scheduler.Stop()
+
+	if len(executor.executed) == 0 {
+		t.Error("Check should have been executed when NextRun was reached")
+	}
+}
+
+func TestNextRunRecalculatedAfterExecution(t *testing.T) {
+	blocker := make(chan struct{})
+	exec := &BlockingExecutor{
+		started: make(chan string, 1),
+		blocker: blocker,
+	}
+	scheduler := NewScheduler(exec, time.UTC, 0)
+
+	check := &MockCheckConfig{
+		name:     "recalc-check",
+		schedule: "0 * * * *",
+		enabled:  true,
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	checkStatus, _ := scheduler.GetCheckStatus("recalc-check")
+	forcedNextRun := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	checkStatus.NextRun = forcedNextRun
+
+	scheduler.Start(10 * time.Millisecond)
+
+	select {
+	case <-exec.started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for check to start")
+	}
+
+	blocker <- struct{}{}
+	time.Sleep(50 * time.Millisecond)
+	scheduler.Stop()
+
+	updatedStatus, _ := scheduler.GetCheckStatus("recalc-check")
+	if updatedStatus.NextRun.Equal(forcedNextRun) {
+		t.Errorf("NextRun should have been recalculated from forced value %v, still same", forcedNextRun)
+	}
+
+	now := time.Now().UTC()
+	if !updatedStatus.NextRun.After(now) {
+		t.Errorf("New NextRun should be in the future, got %v (now %v)", updatedStatus.NextRun, now)
+	}
+
+	if updatedStatus.NextRun.Minute() != 0 {
+		t.Errorf("NextRun should fall on minute 0 for '0 * * * *', got minute %d", updatedStatus.NextRun.Minute())
+	}
+}
+
+func TestTimeZoneRespectedInNextRunCalculation(t *testing.T) {
+	loc := time.FixedZone("PST", -8*3600)
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, loc, 0)
+
+	check := &MockCheckConfig{
+		name:     "tz-check",
+		schedule: "0 12 * * *",
+		enabled:  true,
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	checkStatus, _ := scheduler.GetCheckStatus("tz-check")
+	pstTime := checkStatus.NextRun.In(loc)
+	if pstTime.Hour() != 12 || pstTime.Minute() != 0 {
+		t.Errorf("Expected next run at 12:00 PST, got %v", pstTime.Format(time.RFC3339))
+	}
+
+	utcTime := checkStatus.NextRun.In(time.UTC)
+	if utcTime.Hour() != 20 {
+		t.Errorf("Expected next run at 20:00 UTC (12:00 PST), got %v", utcTime.Format(time.RFC3339))
+	}
+}
+
 func TestApplyStateUpdatesIntervalNextRun(t *testing.T) {
 	executor := &MockExecutor{}
 	scheduler := NewScheduler(executor, time.UTC, 0)

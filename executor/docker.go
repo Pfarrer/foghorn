@@ -144,10 +144,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		defer cleanupSecretDir(secretDir)
 	}
 
-	debugMode := normalizeDebugOutputMode(checkConfig.CheckContainerDebugOutput)
-	if debugMode == "" {
-		debugMode = e.debugOutput
-	}
+	debugMode := effectiveDebugOutputMode(e.debugOutput, checkConfig.CheckContainerDebugOutput)
 
 	containerConfig := &container.Config{
 		Image: image,
@@ -342,6 +339,16 @@ func normalizeDebugOutputMode(mode string) string {
 	default:
 		return ""
 	}
+}
+
+func effectiveDebugOutputMode(globalMode string, checkMode string) string {
+	if normalized := normalizeDebugOutputMode(checkMode); normalized != "" {
+		return normalized
+	}
+	if normalized := normalizeDebugOutputMode(globalMode); normalized != "" {
+		return normalized
+	}
+	return defaultDebugOutputMode
 }
 
 func shouldLogContainerDebugOutput(mode string, failed bool) bool {

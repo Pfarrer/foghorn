@@ -479,6 +479,31 @@ func TestShouldLogContainerDebugOutput(t *testing.T) {
 	}
 }
 
+func TestEffectiveDebugOutputMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		globalMode string
+		checkMode  string
+		want       string
+	}{
+		{name: "defaults to off", globalMode: "", checkMode: "", want: debugOutputModeOff},
+		{name: "uses global mode", globalMode: debugOutputModeOnFailure, checkMode: "", want: debugOutputModeOnFailure},
+		{name: "per-check override wins", globalMode: debugOutputModeOff, checkMode: debugOutputModeAlways, want: debugOutputModeAlways},
+		{name: "invalid check mode falls back to global", globalMode: debugOutputModeAlways, checkMode: " noisy ", want: debugOutputModeAlways},
+		{name: "trimmed mode is accepted", globalMode: debugOutputModeOff, checkMode: " always ", want: debugOutputModeAlways},
+		{name: "invalid global falls back to off", globalMode: "noisy", checkMode: "", want: debugOutputModeOff},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := effectiveDebugOutputMode(tt.globalMode, tt.checkMode)
+			if got != tt.want {
+				t.Fatalf("effectiveDebugOutputMode(%q, %q) = %q, want %q", tt.globalMode, tt.checkMode, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRedactContainerOutput(t *testing.T) {
 	logOutput := strings.Join([]string{
 		"SMTP_PASSWORD=super-secret",

@@ -189,3 +189,233 @@ func TestPrintSummary(t *testing.T) {
 
 	PrintSummary(cfg)
 }
+
+func TestCheckConfigAllFields(t *testing.T) {
+	yamlContent := `checks:
+  - name: full-check
+    image: test/image:1.0.0
+    description: "A full check config"
+    enabled: true
+    tags:
+      - production
+      - critical
+    schedule:
+      interval: "5m"
+    evaluation:
+      - type: json
+        condition: "status == 'pass'"
+        expected: true
+    env:
+      HOST: "example.com"
+      PORT: "443"
+    timeout: "30s"
+    metadata:
+      team: infra
+      priority: high
+`
+	cfg := &Config{}
+	err := yaml.Unmarshal([]byte(yamlContent), cfg)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if len(cfg.Checks) != 1 {
+		t.Fatalf("expected 1 check, got %d", len(cfg.Checks))
+	}
+	c := cfg.Checks[0]
+
+	if c.Name != "full-check" {
+		t.Errorf("name = %q, want full-check", c.Name)
+	}
+	if c.Image != "test/image:1.0.0" {
+		t.Errorf("image = %q", c.Image)
+	}
+	if c.Description != "A full check config" {
+		t.Errorf("description = %q", c.Description)
+	}
+	if !c.Enabled {
+		t.Error("enabled should be true")
+	}
+	if len(c.Tags) != 2 || c.Tags[0] != "production" || c.Tags[1] != "critical" {
+		t.Errorf("tags = %v", c.Tags)
+	}
+	if c.Schedule.Interval != "5m" {
+		t.Errorf("interval = %q", c.Schedule.Interval)
+	}
+	if len(c.Evaluation) != 1 {
+		t.Fatalf("evaluation len = %d", len(c.Evaluation))
+	}
+	if c.Evaluation[0].Type != "json" {
+		t.Errorf("eval type = %q", c.Evaluation[0].Type)
+	}
+	if c.Env["HOST"] != "example.com" || c.Env["PORT"] != "443" {
+		t.Errorf("env = %v", c.Env)
+	}
+	if c.Timeout != "30s" {
+		t.Errorf("timeout = %q", c.Timeout)
+	}
+	if c.Metadata["team"] != "infra" {
+		t.Errorf("metadata = %v", c.Metadata)
+	}
+}
+
+func TestMinimalCheckConfig(t *testing.T) {
+	yamlContent := `checks:
+  - name: minimal
+    image: test/image:1.0.0
+    schedule:
+      cron: "*/5 * * * *"
+    enabled: true
+`
+	cfg := &Config{}
+	err := yaml.Unmarshal([]byte(yamlContent), cfg)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if err := validate(cfg); err != nil {
+		t.Fatalf("minimal config should be valid: %v", err)
+	}
+}
+
+func TestScheduleCronAndInterval(t *testing.T) {
+	cronYAML := `checks:
+  - name: cron-check
+    image: test/image:1.0.0
+    schedule:
+      cron: "*/5 * * * *"
+    enabled: true
+`
+	cfg := &Config{}
+	if err := yaml.Unmarshal([]byte(cronYAML), cfg); err != nil {
+		t.Fatalf("cron unmarshal: %v", err)
+	}
+	if cfg.Checks[0].Schedule.Cron != "*/5 * * * *" {
+		t.Errorf("cron = %q", cfg.Checks[0].Schedule.Cron)
+	}
+
+	intervalYAML := `checks:
+  - name: interval-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "5m"
+    enabled: true
+`
+	cfg2 := &Config{}
+	if err := yaml.Unmarshal([]byte(intervalYAML), cfg2); err != nil {
+		t.Fatalf("interval unmarshal: %v", err)
+	}
+	if cfg2.Checks[0].Schedule.Interval != "5m" {
+		t.Errorf("interval = %q", cfg2.Checks[0].Schedule.Interval)
+	}
+}
+
+func TestEvaluationRuleParsing(t *testing.T) {
+	yamlContent := `checks:
+  - name: eval-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "1m"
+    enabled: true
+    evaluation:
+      - type: threshold
+        condition: "response_time <"
+        threshold: 500.0
+        expected: true
+        metadata:
+          unit: ms
+`
+	cfg := &Config{}
+	if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	r := cfg.Checks[0].Evaluation[0]
+	if r.Type != "threshold" {
+		t.Errorf("type = %q", r.Type)
+	}
+	if r.Condition != "response_time <" {
+		t.Errorf("condition = %q", r.Condition)
+	}
+	if r.Threshold != 500.0 {
+		t.Errorf("threshold = %f", r.Threshold)
+	}
+	if r.Expected != true {
+		t.Errorf("expected = %v", r.Expected)
+	}
+	if r.Metadata["unit"] != "ms" {
+		t.Errorf("metadata = %v", r.Metadata)
+	}
+}
+
+func TestGlobalConfigFields(t *testing.T) {
+	yamlContent := `version: "1.0"
+max_concurrent_checks: 5
+state_log_file: "/var/lib/foghorn/state.log"
+state_log_period: "24h"
+secret_store_file: "/etc/foghorn/secrets.enc"
+check_container_debug_output: "on_failure"
+debug_output_max_chars: 2048
+global:
+  timezone: UTC
+checks:
+  - name: test
+    image: test/image:1.0.0
+    schedule:
+      interval: "1m"
+    enabled: true
+`
+	cfg := &Config{}
+	if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if cfg.Version != "1.0" {
+		t.Errorf("version = %q", cfg.Version)
+	}
+	if cfg.MaxConcurrentChecks != 5 {
+		t.Errorf("max_concurrent_checks = %d", cfg.MaxConcurrentChecks)
+	}
+	if cfg.StateLogFile != "/var/lib/foghorn/state.log" {
+		t.Errorf("state_log_file = %q", cfg.StateLogFile)
+	}
+	if cfg.StateLogPeriod != "24h" {
+		t.Errorf("state_log_period = %q", cfg.StateLogPeriod)
+	}
+	if cfg.SecretStoreFile != "/etc/foghorn/secrets.enc" {
+		t.Errorf("secret_store_file = %q", cfg.SecretStoreFile)
+	}
+	if cfg.CheckContainerDebugOutput != "on_failure" {
+		t.Errorf("check_container_debug_output = %q", cfg.CheckContainerDebugOutput)
+	}
+	if cfg.DebugOutputMaxChars != 2048 {
+		t.Errorf("debug_output_max_chars = %d", cfg.DebugOutputMaxChars)
+	}
+	if cfg.Global["timezone"] != "UTC" {
+		t.Errorf("global = %v", cfg.Global)
+	}
+}
+
+func TestEnvMapParsing(t *testing.T) {
+	yamlContent := `checks:
+  - name: env-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "1m"
+    enabled: true
+    env:
+      HOST: "example.com"
+      PORT: "443"
+`
+	cfg := &Config{}
+	if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	env := cfg.Checks[0].Env
+	if env["HOST"] != "example.com" {
+		t.Errorf("HOST = %q", env["HOST"])
+	}
+	if env["PORT"] != "443" {
+		t.Errorf("PORT = %q", env["PORT"])
+	}
+}

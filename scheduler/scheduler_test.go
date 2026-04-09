@@ -631,6 +631,74 @@ func TestIntervalBasedScheduling(t *testing.T) {
 	}
 }
 
+func TestIntervalCheckNextRunAdvances(t *testing.T) {
+	blocker := make(chan struct{})
+	exec := &BlockingExecutor{
+		started: make(chan string, 1),
+		blocker: blocker,
+	}
+	scheduler := NewScheduler(exec, time.UTC, 0)
+
+	check := &IntervalMockCheckConfig{
+		name:     "interval-check",
+		schedule: "5m",
+		enabled:  true,
+		interval: "5m",
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	beforeRun, _ := scheduler.GetCheckStatus("interval-check")
+	originalNextRun := beforeRun.NextRun
+
+	scheduler.Start(10 * time.Millisecond)
+
+	select {
+	case <-exec.started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Timed out waiting for check to start")
+	}
+
+	blocker <- struct{}{}
+	time.Sleep(50 * time.Millisecond)
+	scheduler.Stop()
+
+	afterRun, _ := scheduler.GetCheckStatus("interval-check")
+	expectedAdvance := 5 * time.Minute
+	advancedBy := afterRun.NextRun.Sub(originalNextRun)
+	if advancedBy < expectedAdvance-time.Second || advancedBy > expectedAdvance+time.Second {
+		t.Errorf("Expected NextRun to advance by ~%v, got %v", expectedAdvance, advancedBy)
+	}
+}
+
+func TestIntervalImmediateFirstRun(t *testing.T) {
+	executor := &MockExecutor{}
+	scheduler := NewScheduler(executor, time.UTC, 0)
+
+	check := &IntervalMockCheckConfig{
+		name:     "new-interval-check",
+		schedule: "1h",
+		enabled:  true,
+		interval: "1h",
+	}
+
+	if err := scheduler.AddCheck(check); err != nil {
+		t.Fatalf("AddCheck() error = %v", err)
+	}
+
+	checkStatus, _ := scheduler.GetCheckStatus("new-interval-check")
+	now := time.Now().UTC()
+	diff := now.Sub(checkStatus.NextRun)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 2*time.Second {
+		t.Errorf("NextRun should be ~now for immediate first run, got diff %v", diff)
+	}
+}
+
 type BlockingExecutor struct {
 	started chan string
 	blocker chan struct{}

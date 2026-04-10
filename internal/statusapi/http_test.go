@@ -2,8 +2,10 @@ package statusapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +44,43 @@ func TestClientGetStatus(t *testing.T) {
 	}
 	if got.Checks["a"].LastStatus != "pass" {
 		t.Fatalf("Checks[a].LastStatus = %q, want pass", got.Checks["a"].LastStatus)
+	}
+}
+
+func TestStatusAPIResponseContainsNoSecrets(t *testing.T) {
+	secretValue := "super-secret-api-key-99999"
+	snapshot := scheduler.Snapshot{
+		GeneratedAt: time.Now().UTC().Truncate(time.Second),
+		Counts: scheduler.SnapshotCounts{
+			Total: 1,
+			Pass:  1,
+		},
+		Checks: map[string]scheduler.CheckStatus{
+			"db-check": {
+				Name:       "db-check",
+				LastStatus: "pass",
+			},
+		},
+	}
+
+	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
+		return snapshot
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	got, err := client.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus() error = %v", err)
+	}
+
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("failed to marshal response: %v", err)
+	}
+
+	if strings.Contains(string(body), secretValue) {
+		t.Fatalf("status API response should not contain secret: %s", string(body))
 	}
 }
 

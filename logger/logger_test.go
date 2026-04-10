@@ -180,3 +180,38 @@ func TestGlobalPackageFunctions(t *testing.T) {
 		t.Fatalf("unexpected output: %q", output)
 	}
 }
+
+func TestSecretsRedacted(t *testing.T) {
+	l, buf := newTestLogger(LevelDebug, false)
+	l.secrets = []string{"super-secret-password", "api-key-123"}
+
+	l.log(LevelInfo, "Check completed with password=super-secret-password and key=api-key-123")
+
+	output := buf.String()
+	for _, secret := range []string{"super-secret-password", "api-key-123"} {
+		if strings.Contains(output, secret) {
+			t.Fatalf("secret %q should not appear in log output: %s", secret, output)
+		}
+	}
+	if !strings.Contains(output, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in output, got: %s", output)
+	}
+}
+
+func TestSecretsRedactedAllLevels(t *testing.T) {
+	l, buf := newTestLogger(LevelDebug, false)
+	l.secrets = []string{"hunter2"}
+
+	for _, level := range []LogLevel{LevelError, LevelWarn, LevelInfo, LevelDebug} {
+		l.log(level, "password is hunter2")
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "hunter2") {
+		t.Fatalf("secret should be redacted at all levels, got: %s", output)
+	}
+	lines := strings.Count(output, "[REDACTED]")
+	if lines != 4 {
+		t.Fatalf("expected 4 redacted lines, got %d: %s", lines, output)
+	}
+}

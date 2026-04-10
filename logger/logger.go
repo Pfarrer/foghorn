@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/pfarrer/foghorn/redact"
 )
 
 type LogLevel int
@@ -37,6 +39,7 @@ type Logger struct {
 	verbose bool
 	mu      sync.Mutex
 	output  io.Writer
+	secrets []string
 }
 
 var global *Logger
@@ -96,6 +99,23 @@ func SetOutput(w io.Writer) {
 	}
 }
 
+func SetSecrets(secrets []string) {
+	if global != nil {
+		global.mu.Lock()
+		global.secrets = secrets
+		global.mu.Unlock()
+	}
+}
+
+func Secrets() []string {
+	if global != nil {
+		global.mu.Lock()
+		defer global.mu.Unlock()
+		return global.secrets
+	}
+	return nil
+}
+
 func ParseLevel(levelStr string) (LogLevel, error) {
 	switch levelStr {
 	case "error":
@@ -134,6 +154,7 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 	}
 
 	message := fmt.Sprintf(format, args...)
+	message = redact.Sanitize(message, l.secrets)
 	fmt.Fprintf(l.output, "%s[%s] %s\n", timestamp, level.String(), message)
 }
 

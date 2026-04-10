@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +20,7 @@ import (
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/imageresolver"
 	"github.com/pfarrer/foghorn/logger"
+	"github.com/pfarrer/foghorn/redact"
 	"github.com/pfarrer/foghorn/scheduler"
 	"github.com/pfarrer/foghorn/secretstore"
 )
@@ -143,6 +143,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	if secretDir != "" {
 		defer cleanupSecretDir(secretDir)
 	}
+
+	logger.SetSecrets(secretsToRedact)
+	defer logger.SetSecrets(nil)
+
+	e.validateEnvNoSecrets(checkName, env, secretsToRedact)
 
 	debugMode := effectiveDebugOutputMode(e.debugOutput, checkConfig.CheckContainerDebugOutput)
 
@@ -308,6 +313,16 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 	return env, secretDir, secretsToRedact, nil
 }
 
+func (e *DockerExecutor) validateEnvNoSecrets(checkName string, env []string, secrets []string) {
+	for _, envVar := range env {
+		for _, secret := range secrets {
+			if secret != "" && strings.Contains(envVar, secret) {
+				logger.Warn("Check %s: env var contains raw secret value, will be redacted in logs: %s", checkName, redact.Sanitize(envVar, secrets))
+			}
+		}
+	}
+}
+
 func demultiplexLogs(data []byte) []byte {
 	var result []byte
 	for len(data) >= 8 {
@@ -362,30 +377,8 @@ func shouldLogContainerDebugOutput(mode string, failed bool) bool {
 	}
 }
 
-var (
-	authHeaderPattern  = regexp.MustCompile(`(?im)(authorization\s*[:=]\s*)([^\r\n]+)`)
-	credentialPattern  = regexp.MustCompile(`(?im)(\"?(?:password|passwd|token|secret|api[_-]?key|authorization)\"?\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,}]+)`)
-	bearerTokenPattern = regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*`)
-)
-
 func redactContainerOutput(output string, secrets []string) string {
-	redacted := output
-	uniqueSecrets := make([]string, 0, len(secrets))
-	for _, secret := range secrets {
-		if secret == "" {
-			continue
-		}
-		if !slices.Contains(uniqueSecrets, secret) {
-			uniqueSecrets = append(uniqueSecrets, secret)
-		}
-	}
-	for _, secret := range uniqueSecrets {
-		redacted = strings.ReplaceAll(redacted, secret, "[REDACTED]")
-	}
-	redacted = authHeaderPattern.ReplaceAllString(redacted, "${1}[REDACTED]")
-	redacted = credentialPattern.ReplaceAllString(redacted, "${1}[REDACTED]")
-	redacted = bearerTokenPattern.ReplaceAllString(redacted, "Bearer [REDACTED]")
-	return redacted
+	return redact.Sanitize(output, secrets)
 }
 
 func (e *DockerExecutor) logContainerDebugOutput(checkName string, containerID string, reason string, secretsToRedact []string) error {

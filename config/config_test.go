@@ -419,3 +419,49 @@ func TestEnvMapParsing(t *testing.T) {
 		t.Errorf("PORT = %q", env["PORT"])
 	}
 }
+
+func TestMixedConfigFormat(t *testing.T) {
+	yamlContent := `version: "1.0"
+checks:
+  - name: list-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "1m"
+    enabled: true
+---
+name: doc-check
+image: test/image:2.0.0
+schedule:
+  cron: "* * * * *"
+enabled: true
+`
+	tmpDir := t.TempDir()
+	invalidPath := tmpDir + "/mixed.yaml"
+	if writeErr := os.WriteFile(invalidPath, []byte(yamlContent), 0o644); writeErr != nil {
+		t.Fatalf("failed to write mixed test YAML: %v", writeErr)
+	}
+
+	cfg, err := Load(invalidPath)
+	if err != nil {
+		t.Fatalf("Load() failed for mixed YAML: %v", err)
+	}
+
+	if len(cfg.Checks) != 2 {
+		t.Fatalf("Expected 2 checks, got %d", len(cfg.Checks))
+	}
+
+	foundList := false
+	foundDoc := false
+	for _, c := range cfg.Checks {
+		if c.Name == "list-check" {
+			foundList = true
+		}
+		if c.Name == "doc-check" {
+			foundDoc = true
+		}
+	}
+
+	if !foundList || !foundDoc {
+		t.Errorf("Failed to parse both list and doc checks from mixed format")
+	}
+}

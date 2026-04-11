@@ -34,4 +34,4 @@
 
 ## 6. Archive Change
 
-- [ ] 6.1 Archive the OpenSpec change once implementation is complete
+- [x] 6.1 Archive the OpenSpec change once implementation is complete

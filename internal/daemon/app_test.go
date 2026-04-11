@@ -2,12 +2,16 @@ package daemon
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/containerimage"
+	"github.com/pfarrer/foghorn/scheduler"
 )
 
 func TestVerifyImageAvailability_NoChecks(t *testing.T) {
@@ -236,4 +240,223 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+type oneShotMockExecutor struct {
+	mu        sync.Mutex
+	executed  []string
+	statusMap map[string]string
+	callback  func(checkName string, status string, duration time.Duration, startTime time.Time, err error)
+	execCount atomic.Int32
+}
+
+func (e *oneShotMockExecutor) Execute(check scheduler.CheckConfig) error {
+	e.mu.Lock()
+	e.executed = append(e.executed, check.GetName())
+	status := "pass"
+	if s, ok := e.statusMap[check.GetName()]; ok {
+		status = s
+	}
+	e.mu.Unlock()
+
+	e.execCount.Add(1)
+
+	if e.callback != nil {
+		e.callback(check.GetName(), status, 10*time.Millisecond, time.Time{}, nil)
+	}
+	return nil
+}
+
+func (e *oneShotMockExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)) {
+	e.callback = callback
+}
+
+func (e *oneShotMockExecutor) getExecuted() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	result := make([]string, len(e.executed))
+	copy(result, e.executed)
+	return result
+}
+
+func buildOneShotScheduler(exec scheduler.CheckExecutor, checks []config.CheckConfig) *scheduler.Scheduler {
+	sched := scheduler.NewScheduler(exec, time.UTC, 0)
+	for i := range checks {
+		adapter := scheduler.NewConfigAdapter(&checks[i])
+		sched.AddCheck(adapter)
+	}
+	return sched
+}
+
+func TestRunOneShot_FlagEnablesMode(t *testing.T) {
+	exec := &oneShotMockExecutor{
+		statusMap: map[string]string{
+			"check-a": "pass",
+		},
+	}
+
+	checks := []config.CheckConfig{
+		{Name: "check-a", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+	}
+	sched := buildOneShotScheduler(exec, checks)
+
+	exitCode := runOneShot(sched, exec, 0)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+
+	executed := exec.getExecuted()
+	if len(executed) != 1 || executed[0] != "check-a" {
+		t.Errorf("expected [check-a] executed, got %v", executed)
+	}
+}
+
+func TestRunOneShot_EachCheckRunsOnce(t *testing.T) {
+	exec := &oneShotMockExecutor{
+		statusMap: map[string]string{
+			"check-1": "pass",
+			"check-2": "pass",
+			"check-3": "pass",
+			"check-4": "pass",
+			"check-5": "pass",
+		},
+	}
+
+	checks := []config.CheckConfig{
+		{Name: "check-1", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "check-2", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "check-3", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "check-4", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "check-5", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+	}
+	sched := buildOneShotScheduler(exec, checks)
+
+	exitCode := runOneShot(sched, exec, 0)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+
+	if count := exec.execCount.Load(); count != 5 {
+		t.Errorf("expected 5 executions, got %d", count)
+	}
+
+	executed := exec.getExecuted()
+	if len(executed) != 5 {
+		t.Errorf("expected 5 unique executions, got %v", executed)
+	}
+}
+
+func TestRunOneShot_ExitCode0WhenAllPassOrWarn(t *testing.T) {
+	exec := &oneShotMockExecutor{
+		statusMap: map[string]string{
+			"pass-check": "pass",
+			"warn-check": "warn",
+		},
+	}
+
+	checks := []config.CheckConfig{
+		{Name: "pass-check", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "warn-check", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+	}
+	sched := buildOneShotScheduler(exec, checks)
+
+	exitCode := runOneShot(sched, exec, 0)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 when all pass/warn, got %d", exitCode)
+	}
+}
+
+func TestRunOneShot_ExitCode1WhenAnyFailOrUnknown(t *testing.T) {
+	tests := []struct {
+		name      string
+		statusMap map[string]string
+		wantCode  int
+	}{
+		{
+			name:      "fail status",
+			statusMap: map[string]string{"check-a": "fail"},
+			wantCode:  1,
+		},
+		{
+			name:      "unknown status",
+			statusMap: map[string]string{"check-a": "unknown"},
+			wantCode:  1,
+		},
+		{
+			name:      "mixed pass and fail",
+			statusMap: map[string]string{"pass-check": "pass", "fail-check": "fail"},
+			wantCode:  1,
+		},
+		{
+			name:      "mixed pass and unknown",
+			statusMap: map[string]string{"pass-check": "pass", "unknown-check": "unknown"},
+			wantCode:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exec := &oneShotMockExecutor{statusMap: tt.statusMap}
+
+			var checks []config.CheckConfig
+			for name := range tt.statusMap {
+				checks = append(checks, config.CheckConfig{
+					Name: name, Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"},
+				})
+			}
+			sched := buildOneShotScheduler(exec, checks)
+
+			exitCode := runOneShot(sched, exec, 0)
+
+			if exitCode != tt.wantCode {
+				t.Errorf("expected exit code %d, got %d", tt.wantCode, exitCode)
+			}
+		})
+	}
+}
+
+func TestRunOneShot_DisabledChecksSkipped(t *testing.T) {
+	exec := &oneShotMockExecutor{
+		statusMap: map[string]string{
+			"enabled-check": "pass",
+		},
+	}
+
+	checks := []config.CheckConfig{
+		{Name: "enabled-check", Enabled: true, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+		{Name: "disabled-check", Enabled: false, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+	}
+	sched := buildOneShotScheduler(exec, checks)
+
+	exitCode := runOneShot(sched, exec, 0)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+
+	if count := exec.execCount.Load(); count != 1 {
+		t.Errorf("expected 1 execution (disabled check skipped), got %d", count)
+	}
+}
+
+func TestRunOneShot_NoEnabledChecks(t *testing.T) {
+	exec := &oneShotMockExecutor{statusMap: map[string]string{}}
+
+	checks := []config.CheckConfig{
+		{Name: "disabled-check", Enabled: false, Schedule: config.Schedule{Cron: "*/5 * * * *"}},
+	}
+	sched := buildOneShotScheduler(exec, checks)
+
+	exitCode := runOneShot(sched, exec, 0)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 with no enabled checks, got %d", exitCode)
+	}
+
+	if count := exec.execCount.Load(); count != 0 {
+		t.Errorf("expected 0 executions, got %d", count)
+	}
 }

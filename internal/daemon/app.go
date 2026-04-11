@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,7 @@ func Run() {
 		logLevel                string
 		verbose                 bool
 		dryRun                  bool
+		oneShot                 bool
 		verifyImageAvailability bool
 		statusListen            string
 		stateLogFile            string
@@ -55,6 +57,7 @@ func Run() {
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	flag.BoolVar(&dryRun, "d", false, "Validate configuration only")
 	flag.BoolVar(&dryRun, "dry-run", false, "Validate configuration only")
+	flag.BoolVar(&oneShot, "one-shot", false, "Run all enabled checks once and exit")
 	flag.BoolVar(&verifyImageAvailability, "i", false, "Verify all Docker images in config are available locally")
 	flag.BoolVar(&verifyImageAvailability, "verify-image-availability", false, "Verify all Docker images in config are available locally")
 	flag.StringVar(&statusListen, "status-listen", statusapi.DefaultListenAddr, "Status API listen address")
@@ -80,6 +83,8 @@ func Run() {
 		fmt.Fprintf(os.Stderr, "      Enable verbose logging\n")
 		fmt.Fprintf(os.Stderr, "  -d, --dry-run\n")
 		fmt.Fprintf(os.Stderr, "      Validate configuration only\n")
+		fmt.Fprintf(os.Stderr, "  --one-shot\n")
+		fmt.Fprintf(os.Stderr, "      Run all enabled checks once and exit\n")
 		fmt.Fprintf(os.Stderr, "  -i, --verify-image-availability\n")
 		fmt.Fprintf(os.Stderr, "      Verify all Docker images in config are available locally\n")
 		fmt.Fprintf(os.Stderr, "  --status-listen <addr>\n")
@@ -204,6 +209,30 @@ func Run() {
 		logger.Info("Secret store enabled: %s", storePath)
 	}
 
+	if oneShot {
+		maxConcurrent := cfg.MaxConcurrentChecks
+		sched := scheduler.NewScheduler(dockerExecutor, time.UTC, maxConcurrent)
+		if stateLog != nil {
+			sched.SetResultLogger(stateLog)
+		}
+
+		for i := range cfg.Checks {
+			check := &cfg.Checks[i]
+			adapter := scheduler.NewConfigAdapter(check)
+			if err := sched.AddCheck(adapter); err != nil {
+				logger.Error("Error adding check %s: %v", check.Name, err)
+				fmt.Fprintf(os.Stderr, "Error adding check %s: %v\n", check.Name, err)
+			}
+		}
+
+		if len(stateRecords) > 0 {
+			sched.ApplyState(stateRecords)
+		}
+
+		exitCode := runOneShot(sched, dockerExecutor, maxConcurrent)
+		os.Exit(exitCode)
+	}
+
 	maxConcurrent := cfg.MaxConcurrentChecks
 	if maxConcurrent > 0 {
 		logger.Info("Maximum concurrent checks: %d", maxConcurrent)
@@ -227,7 +256,7 @@ func Run() {
 	}
 
 	sched.Start(1 * time.Second)
-	statusSrv := statusapi.StartServer(statusListen, sched.Snapshot)
+	statusSrv := statusapi.StartServer(statusListen, sched.Snapshot, stateLog)
 	statusErr := make(chan error, 1)
 	go func() {
 		logger.Info("Status API listening on http://%s%s", statusListen, statusapi.StatusPath)
@@ -251,6 +280,71 @@ func Run() {
 		logger.Warn("Status API shutdown error: %v", err)
 	}
 	sched.Stop()
+}
+
+func runOneShot(sched *scheduler.Scheduler, exec scheduler.CheckExecutor, maxConcurrent int) int {
+	allChecks := sched.GetAllChecks()
+
+	var enabledChecks []string
+	for name, check := range allChecks {
+		if check.Config.IsEnabled() {
+			enabledChecks = append(enabledChecks, name)
+		}
+	}
+
+	if len(enabledChecks) == 0 {
+		logger.Info("One-shot mode: no enabled checks to run")
+		return 0
+	}
+
+	logger.Info("One-shot mode: running %d checks", len(enabledChecks))
+
+	var wg sync.WaitGroup
+
+	limit := maxConcurrent
+	if limit <= 0 {
+		limit = len(enabledChecks)
+	}
+	sem := make(chan struct{}, limit)
+
+	for _, name := range enabledChecks {
+		check := allChecks[name]
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(name string, check *scheduler.ScheduledCheck) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := exec.Execute(check.Config); err != nil {
+				logger.Error("One-shot: check %s failed: %v", name, err)
+			}
+		}(name, check)
+	}
+
+	wg.Wait()
+
+	passCount, warnCount, failCount, unknownCount := 0, 0, 0, 0
+	for _, name := range enabledChecks {
+		if check, ok := allChecks[name]; ok {
+			switch check.LastStatus {
+			case "pass":
+				passCount++
+			case "warn":
+				warnCount++
+			case "fail":
+				failCount++
+			default:
+				unknownCount++
+			}
+		}
+	}
+
+	logger.Info("One-shot complete: %d pass, %d warn, %d fail, %d unknown",
+		passCount, warnCount, failCount, unknownCount)
+
+	if failCount > 0 || unknownCount > 0 {
+		return 1
+	}
+	return 0
 }
 
 func runSecretCLI(args []string) int {

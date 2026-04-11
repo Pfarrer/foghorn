@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pfarrer/foghorn/scheduler"
+	"github.com/pfarrer/foghorn/state"
 )
 
 func TestClientGetStatus(t *testing.T) {
@@ -31,7 +32,7 @@ func TestClientGetStatus(t *testing.T) {
 	}
 	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
 		return want
-	}))
+	}, nil))
 	defer server.Close()
 
 	client := NewClient(server.URL)
@@ -65,7 +66,7 @@ func TestStatusAPIResponseContainsNoSecrets(t *testing.T) {
 
 	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
 		return snapshot
-	}))
+	}, nil))
 	defer server.Close()
 
 	client := NewClient(server.URL)
@@ -87,7 +88,7 @@ func TestStatusAPIResponseContainsNoSecrets(t *testing.T) {
 func TestStatusPathMethodNotAllowed(t *testing.T) {
 	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
 		return scheduler.Snapshot{}
-	}))
+	}, nil))
 	defer server.Close()
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+StatusPath, nil)
@@ -101,5 +102,107 @@ func TestStatusPathMethodNotAllowed(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+}
+
+type mockHistoryQuerier struct {
+	records []state.Record
+	err     error
+}
+
+func (m *mockHistoryQuerier) Query(checkName string, start, end time.Time) ([]state.Record, error) {
+	return m.records, m.err
+}
+
+func TestHistoryEndpointReturnsRecords(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []state.Record{
+		{CheckName: "test-check", Status: "pass", DurationMs: 100, CompletedAt: now},
+	}
+	querier := &mockHistoryQuerier{records: records}
+
+	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
+		return scheduler.Snapshot{}
+	}, querier))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + HistoryPath)
+	if err != nil {
+		t.Fatalf("GET history: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var got []state.Record
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 || got[0].CheckName != "test-check" {
+		t.Fatalf("expected 1 record for test-check, got %v", got)
+	}
+}
+
+func TestHistoryEndpointWithCheckFilter(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []state.Record{
+		{CheckName: "tls-check", Status: "pass", CompletedAt: now},
+	}
+	querier := &mockHistoryQuerier{records: records}
+
+	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
+		return scheduler.Snapshot{}
+	}, querier))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + HistoryPath + "?check=tls-check")
+	if err != nil {
+		t.Fatalf("GET history: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestHistoryEndpointWithTimeRange(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	querier := &mockHistoryQuerier{records: nil}
+
+	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
+		return scheduler.Snapshot{}
+	}, querier))
+	defer server.Close()
+
+	start := now.Add(-1 * time.Hour).Format(time.RFC3339)
+	end := now.Format(time.RFC3339)
+	resp, err := http.Get(server.URL + HistoryPath + "?start=" + start + "&end=" + end)
+	if err != nil {
+		t.Fatalf("GET history: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestHistoryEndpointNotAvailable(t *testing.T) {
+	server := httptest.NewServer(NewHandler(func() scheduler.Snapshot {
+		return scheduler.Snapshot{}
+	}, nil))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + HistoryPath)
+	if err != nil {
+		t.Fatalf("GET history: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
 	}
 }

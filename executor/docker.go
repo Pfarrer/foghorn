@@ -37,7 +37,7 @@ type DockerExecutor struct {
 	cli            *client.Client
 	defaultTimeout time.Duration
 	outputLocation string
-	resultCallback func(checkName string, status string, duration time.Duration)
+	resultCallback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)
 	resolveMu      sync.Mutex
 	resolvedImages map[string]string
 	secretResolver SecretResolver
@@ -89,6 +89,12 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 	}, nil
 }
 
+func (e *DockerExecutor) reportResult(checkName string, status string, startTime time.Time, execErr error) {
+	if e.resultCallback != nil {
+		e.resultCallback(checkName, status, time.Since(startTime), startTime, execErr)
+	}
+}
+
 func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	adapter, ok := check.(*scheduler.ConfigAdapter)
 	if !ok {
@@ -113,18 +119,12 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	image, err := e.resolveImage(ctx, checkConfig.Image)
 	if err != nil {
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Failed to resolve image: %v", checkName, err)
 		return err
 	}
 	if err := e.ensureImageAvailable(ctx, image, checkName); err != nil {
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Failed to prepare image: %v", checkName, err)
 		return err
 	}
@@ -133,10 +133,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	env, secretDir, secretsToRedact, err := e.buildEnvVars(checkConfig)
 	if err != nil {
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Failed to prepare environment: %v", checkName, err)
 		return err
 	}
@@ -165,10 +162,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 
 	resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Failed to create container: %v", checkName, err)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
@@ -176,10 +170,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 	defer e.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
 
 	if err := e.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Failed to start container: %v", checkName, err)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
@@ -196,26 +187,18 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 				}
 			}
 
-			duration := time.Since(startTime)
-			if e.resultCallback != nil {
-				e.resultCallback(checkName, "error", duration)
-			}
+			execErr := fmt.Errorf("check failed with exit code %d", statusResult.StatusCode)
+			e.reportResult(checkName, "error", startTime, execErr)
 			logger.Error("Check %s: Failed with exit code %d", checkName, statusResult.StatusCode)
-			return fmt.Errorf("check failed with exit code %d", statusResult.StatusCode)
+			return execErr
 		}
 		result, err := e.readResult(ctx, resp.ID)
 		if err != nil {
-			duration := time.Since(startTime)
-			if e.resultCallback != nil {
-				e.resultCallback(checkName, "error", duration)
-			}
+			e.reportResult(checkName, "error", startTime, err)
 			logger.Error("Check %s: Failed to read result: %v", checkName, err)
 			return fmt.Errorf("failed to read check result: %w", err)
 		}
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, result.Status, duration)
-		}
+		e.reportResult(checkName, result.Status, startTime, nil)
 		if shouldLogContainerDebugOutput(debugMode, false) {
 			if err := e.logContainerDebugOutput(checkName, resp.ID, "success", secretsToRedact); err != nil {
 				logger.Debug("Check %s: Failed to read container output after success: %v", checkName, err)
@@ -224,10 +207,7 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		logger.Info("Check %s: Completed with status %s (duration: %dms) - %s", checkName, result.Status, result.DurationMs, result.Message)
 		return nil
 	case err := <-errCh:
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		e.reportResult(checkName, "error", startTime, err)
 		logger.Error("Check %s: Error waiting for container: %v", checkName, err)
 		return fmt.Errorf("error waiting for container: %w", err)
 	case <-ctx.Done():
@@ -236,13 +216,11 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 				logger.Debug("Check %s: Failed to read container output after timeout: %v", checkName, err)
 			}
 		}
-		duration := time.Since(startTime)
-		if e.resultCallback != nil {
-			e.resultCallback(checkName, "error", duration)
-		}
+		timeoutErr := fmt.Errorf("check execution timed out after %v", timeout)
+		e.reportResult(checkName, "error", startTime, timeoutErr)
 		logger.Warn("Check %s: Execution timed out after %v", checkName, timeout)
 		e.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
-		return fmt.Errorf("check execution timed out after %v", timeout)
+		return timeoutErr
 	}
 }
 
@@ -455,7 +433,7 @@ func (e *DockerExecutor) Close() error {
 	return nil
 }
 
-func (e *DockerExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+func (e *DockerExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)) {
 	e.resultCallback = callback
 }
 

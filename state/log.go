@@ -14,10 +14,12 @@ import (
 )
 
 type Record struct {
-	CheckName   string    `json:"check_name"`
-	Status      string    `json:"status"`
-	DurationMs  int64     `json:"duration_ms"`
-	CompletedAt time.Time `json:"completed_at"`
+	CheckName    string    `json:"check_name"`
+	Status       string    `json:"status"`
+	DurationMs   int64     `json:"duration_ms"`
+	CompletedAt  time.Time `json:"completed_at"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	ErrorDetails string    `json:"error_details,omitempty"`
 }
 
 type StateLog struct {
@@ -73,14 +75,20 @@ func (s *StateLog) Close() error {
 }
 
 func (s *StateLog) RecordResult(checkName string, status string, duration time.Duration, completedAt time.Time) error {
+	return s.RecordResultFull(checkName, status, duration, completedAt, time.Time{}, "")
+}
+
+func (s *StateLog) RecordResultFull(checkName string, status string, duration time.Duration, completedAt time.Time, startedAt time.Time, errorDetails string) error {
 	if completedAt.IsZero() {
 		completedAt = time.Now().UTC()
 	}
 	record := Record{
-		CheckName:   checkName,
-		Status:      status,
-		DurationMs:  duration.Milliseconds(),
-		CompletedAt: completedAt.UTC(),
+		CheckName:    checkName,
+		Status:       status,
+		DurationMs:   duration.Milliseconds(),
+		CompletedAt:  completedAt.UTC(),
+		StartedAt:    startedAt.UTC(),
+		ErrorDetails: errorDetails,
 	}
 	return s.Append(record)
 }
@@ -102,6 +110,37 @@ func (s *StateLog) Load() ([]Record, error) {
 	}
 
 	return filtered, nil
+}
+
+func (s *StateLog) Query(checkName string, start, end time.Time) ([]Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records, err := s.readAll()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	allFiltered := s.filter(records, now)
+	if len(allFiltered) != len(records) {
+		_ = s.writeAll(allFiltered)
+	}
+
+	var result []Record
+	for _, r := range allFiltered {
+		if checkName != "" && r.CheckName != checkName {
+			continue
+		}
+		if !start.IsZero() && r.CompletedAt.Before(start) {
+			continue
+		}
+		if !end.IsZero() && r.CompletedAt.After(end) {
+			continue
+		}
+		result = append(result, r)
+	}
+	return result, nil
 }
 
 func (s *StateLog) Append(record Record) error {

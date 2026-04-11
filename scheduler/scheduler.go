@@ -25,7 +25,7 @@ type IntervalCheckConfig interface {
 
 type CheckExecutor interface {
 	Execute(check CheckConfig) error
-	SetResultCallback(callback func(checkName string, status string, duration time.Duration))
+	SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error))
 }
 
 type ScheduledCheck struct {
@@ -57,6 +57,7 @@ type Scheduler struct {
 
 type ResultLogger interface {
 	RecordResult(checkName string, status string, duration time.Duration, completedAt time.Time) error
+	RecordResultFull(checkName string, status string, duration time.Duration, completedAt time.Time, startedAt time.Time, errorDetails string) error
 }
 
 type CheckHistoryEntry struct {
@@ -406,7 +407,7 @@ func (s *Scheduler) GetCounts() (total, running, queued, pass, fail, warn int) {
 	return
 }
 
-func (s *Scheduler) handleCheckResult(checkName string, status string, duration time.Duration) {
+func (s *Scheduler) handleCheckResult(checkName string, status string, duration time.Duration, startTime time.Time, execErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -421,8 +422,20 @@ func (s *Scheduler) handleCheckResult(checkName string, status string, duration 
 	}
 
 	if s.resultLogger != nil {
-		if err := s.resultLogger.RecordResult(checkName, status, duration, completedAt); err != nil {
-			logger.Error("Failed to persist state for %s: %v", checkName, err)
+		errorDetails := ""
+		if execErr != nil {
+			errorDetails = execErr.Error()
+		}
+		if rl, ok := s.resultLogger.(interface {
+			RecordResultFull(string, string, time.Duration, time.Time, time.Time, string) error
+		}); ok {
+			if err := rl.RecordResultFull(checkName, status, duration, completedAt, startTime, errorDetails); err != nil {
+				logger.Error("Failed to persist state for %s: %v", checkName, err)
+			}
+		} else {
+			if err := s.resultLogger.RecordResult(checkName, status, duration, completedAt); err != nil {
+				logger.Error("Failed to persist state for %s: %v", checkName, err)
+			}
 		}
 	}
 }

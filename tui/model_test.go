@@ -21,7 +21,7 @@ func (s *stubConfig) IsEnabled() bool     { return s.enabled }
 type stubExecutor struct{}
 
 func (s *stubExecutor) Execute(check scheduler.CheckConfig) error { return nil }
-func (s *stubExecutor) SetResultCallback(callback func(string, string, time.Duration)) {
+func (s *stubExecutor) SetResultCallback(callback func(string, string, time.Duration, time.Time, error)) {
 }
 
 func TestCheckHeaderColumns(t *testing.T) {

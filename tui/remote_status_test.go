@@ -30,7 +30,7 @@ func TestRemoteStatusReaderRefresh(t *testing.T) {
 				},
 			},
 		}
-	}))
+	}, nil))
 	defer server.Close()
 
 	reader, err := newRemoteStatusReader(server.URL)

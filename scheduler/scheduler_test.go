@@ -53,7 +53,7 @@ func (m *IntervalMockCheckConfig) GetInterval() string {
 
 type MockExecutor struct {
 	executed []string
-	callback func(checkName string, status string, duration time.Duration)
+	callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)
 }
 
 func (m *MockExecutor) Execute(check CheckConfig) error {
@@ -61,14 +61,14 @@ func (m *MockExecutor) Execute(check CheckConfig) error {
 	return nil
 }
 
-func (m *MockExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+func (m *MockExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)) {
 	m.callback = callback
 }
 
 type SlowExecutor struct {
 	executed []string
 	blocker  chan struct{}
-	callback func(checkName string, status string, duration time.Duration)
+	callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)
 }
 
 func (m *SlowExecutor) Execute(check CheckConfig) error {
@@ -77,7 +77,7 @@ func (m *SlowExecutor) Execute(check CheckConfig) error {
 	return nil
 }
 
-func (m *SlowExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+func (m *SlowExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)) {
 	m.callback = callback
 }
 
@@ -267,7 +267,7 @@ func TestSchedulerHistoryTrim(t *testing.T) {
 		if i%2 == 1 {
 			status = "fail"
 		}
-		scheduler.handleCheckResult(check.name, status, time.Second)
+		scheduler.handleCheckResult(check.name, status, time.Second, time.Time{}, nil)
 	}
 
 	checkStatus, exists := scheduler.GetCheckStatus(check.name)
@@ -710,7 +710,7 @@ func (b *BlockingExecutor) Execute(check CheckConfig) error {
 	return nil
 }
 
-func (b *BlockingExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration)) {
+func (b *BlockingExecutor) SetResultCallback(callback func(checkName string, status string, duration time.Duration, startTime time.Time, err error)) {
 }
 
 func TestDueCheckPriorityOrder(t *testing.T) {

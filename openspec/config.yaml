@@ -30,19 +30,19 @@ context: |
   Conventions:
   - All documentation must be concise and short.
   - Test coverage is critical — always verify: code compiles, no warnings, all tests pass.
-  - Spec status tracked in specs/STATUS.md.
-  - Legacy specs live in specs/ with a specific format (Category, Description, Usage Steps, Implementation Notes, Acceptance Criteria, Passes field).
-  - All new specs must be created using the OpenSpec workflow in openspec/ (proposals, specs, tasks). Do not add new specs to the legacy specs/ directory.
+  - Spec status tracked via OpenSpec changes and archived specs in openspec/specs/.
+  - All specs must be created using the OpenSpec workflow in openspec/ (proposals, specs, tasks).
+  - Legacy specs/ directory has been removed; all specs now live under openspec/.
   - Standard Go project layout with packages by domain.
   - No comments in code unless requested.
 
 rules:
   proposal:
     - Keep proposals concise and direct.
-    - Reference existing specs in specs/ where relevant.
+    - Reference existing specs in openspec/specs/ where relevant.
   tasks:
     - Each task should be implementable in under 2 hours.
     - Always include verification steps (build, test).
   spec:
-    - Follow the existing spec format from specs/template.md.
+    - Follow the existing spec format from openspec/specs/.
     - Include Category, Description, Usage Steps, Implementation Notes, Acceptance Criteria.

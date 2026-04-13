@@ -34,10 +34,10 @@ Test coverage is critical. Before considering any work complete, always verify:
 
 ## Spec Status Tracking
 
-Spec implementation status is tracked in [specs/STATUS.md](specs/STATUS.md). When implementing a spec:
-1. Move the spec from "Ready" to "Done" upon completion
-2. Set the `Passes` field to `true` in the spec file
-3. Update any relevant documentation
+Specs are managed via OpenSpec in `openspec/`. When implementing a spec:
+1. Use `/opsx-apply <change>` to work through tasks
+2. Mark tasks complete as you go
+3. Archive completed changes with `/opsx-archive`
 
 ## Documentation Style
 

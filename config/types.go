@@ -37,4 +37,6 @@ type Config struct {
 	SecretStoreFile           string                 `yaml:"secret_store_file,omitempty"`
 	CheckContainerDebugOutput string                 `yaml:"check_container_debug_output,omitempty"`
 	DebugOutputMaxChars       int                    `yaml:"debug_output_max_chars,omitempty"`
+	AutoUpdateContainers      bool                   `yaml:"auto_update_containers,omitempty"`
+	AutoUpdateSchedule        Schedule               `yaml:"auto_update_schedule,omitempty"`
 }

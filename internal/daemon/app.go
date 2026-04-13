@@ -21,6 +21,7 @@ import (
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/executor"
 	"github.com/pfarrer/foghorn/imageresolver"
+	"github.com/pfarrer/foghorn/internal/autoupdate"
 	"github.com/pfarrer/foghorn/internal/statusapi"
 	"github.com/pfarrer/foghorn/logger"
 	"github.com/pfarrer/foghorn/scheduler"
@@ -256,6 +257,24 @@ func Run() {
 	}
 
 	sched.Start(1 * time.Second)
+
+	autoUpdateCancel := func() {}
+	if cfg.AutoUpdateContainers {
+		dockerCli, dockerErr := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if dockerErr != nil {
+			logger.Warn("Auto-update: failed to create Docker client: %v", dockerErr)
+		} else {
+			updater := autoupdate.NewAutoUpdater(dockerCli, cfg.Checks)
+			auCtx, auCancel := context.WithCancel(context.Background())
+			autoUpdateCancel = func() {
+				auCancel()
+				dockerCli.Close()
+			}
+			go updater.StartScheduled(auCtx, cfg.AutoUpdateSchedule)
+			logger.Info("Auto-update: enabled with schedule (cron=%q interval=%q)", cfg.AutoUpdateSchedule.Cron, cfg.AutoUpdateSchedule.Interval)
+		}
+	}
+
 	statusSrv := statusapi.StartServer(statusListen, sched.Snapshot, stateLog)
 	statusErr := make(chan error, 1)
 	go func() {
@@ -279,6 +298,7 @@ func Run() {
 	if err := statusSrv.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("Status API shutdown error: %v", err)
 	}
+	autoUpdateCancel()
 	sched.Stop()
 }
 

@@ -127,6 +127,33 @@ func TestValidateRequiredFields(t *testing.T) {
 			config:  "check_container_debug_output: on_failure\ndebug_output_max_chars: 2048\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    check_container_debug_output: always\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
 			wantErr: false,
 		},
+		{
+			name:    "auto_update enabled without schedule",
+			config:  "auto_update_containers: true\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "auto_update_schedule is required when auto_update_containers is true",
+		},
+		{
+			name:    "auto_update with both cron and interval",
+			config:  "auto_update_containers: true\nauto_update_schedule:\n  cron: '* * * * *'\n  interval: '1h'\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: true,
+			errMsg:  "auto_update_schedule: only one of cron or interval should be specified",
+		},
+		{
+			name:    "auto_update enabled with interval",
+			config:  "auto_update_containers: true\nauto_update_schedule:\n  interval: '6h'\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: false,
+		},
+		{
+			name:    "auto_update enabled with cron",
+			config:  "auto_update_containers: true\nauto_update_schedule:\n  cron: '0 */6 * * *'\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: false,
+		},
+		{
+			name:    "auto_update disabled without schedule",
+			config:  "auto_update_containers: false\nchecks:\n  - name: test\n    image: test/image:1.0.0\n    schedule:\n      interval: '1m'\n    evaluation: []\n    enabled: true",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -96,6 +96,14 @@ func validate(cfg *Config) error {
 	if cfg.DebugOutputMaxChars < 0 {
 		return fmt.Errorf("debug_output_max_chars cannot be negative")
 	}
+	if cfg.AutoUpdateContainers {
+		if cfg.AutoUpdateSchedule.Cron == "" && cfg.AutoUpdateSchedule.Interval == "" {
+			return fmt.Errorf("auto_update_schedule is required when auto_update_containers is true")
+		}
+		if cfg.AutoUpdateSchedule.Cron != "" && cfg.AutoUpdateSchedule.Interval != "" {
+			return fmt.Errorf("auto_update_schedule: only one of cron or interval should be specified")
+		}
+	}
 
 	for i, check := range cfg.Checks {
 		if check.Name == "" {
@@ -169,5 +177,14 @@ func mergeConfig(dst *Config, src *Config) {
 	}
 	if len(src.Checks) > 0 {
 		dst.Checks = append(dst.Checks, src.Checks...)
+	}
+	if src.AutoUpdateContainers {
+		dst.AutoUpdateContainers = true
+	}
+	if src.AutoUpdateSchedule.Cron != "" {
+		dst.AutoUpdateSchedule.Cron = src.AutoUpdateSchedule.Cron
+	}
+	if src.AutoUpdateSchedule.Interval != "" {
+		dst.AutoUpdateSchedule.Interval = src.AutoUpdateSchedule.Interval
 	}
 }

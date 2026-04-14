@@ -447,6 +447,61 @@ func TestEnvMapParsing(t *testing.T) {
 	}
 }
 
+func TestPersistentMemoryParsing(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) {
+		yamlContent := `checks:
+  - name: persistent-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "5m"
+    enabled: true
+    persistent_memory: true
+`
+		cfg := &Config{}
+		if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !cfg.Checks[0].PersistentMemory {
+			t.Fatal("expected PersistentMemory to be true")
+		}
+	})
+
+	t.Run("disabled by default", func(t *testing.T) {
+		yamlContent := `checks:
+  - name: normal-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "5m"
+    enabled: true
+`
+		cfg := &Config{}
+		if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if cfg.Checks[0].PersistentMemory {
+			t.Fatal("expected PersistentMemory to be false by default")
+		}
+	})
+
+	t.Run("explicitly false", func(t *testing.T) {
+		yamlContent := `checks:
+  - name: explicit-check
+    image: test/image:1.0.0
+    schedule:
+      interval: "5m"
+    enabled: true
+    persistent_memory: false
+`
+		cfg := &Config{}
+		if err := yaml.Unmarshal([]byte(yamlContent), cfg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if cfg.Checks[0].PersistentMemory {
+			t.Fatal("expected PersistentMemory to be false")
+		}
+	})
+}
+
 func TestMixedConfigFormat(t *testing.T) {
 	yamlContent := `version: "1.0"
 checks:

@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/pfarrer/foghorn/config"
 	"github.com/pfarrer/foghorn/imageresolver"
@@ -160,6 +161,16 @@ func (e *DockerExecutor) Execute(check scheduler.CheckConfig) error {
 		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:/run/foghorn/secrets:ro", secretDir))
 	}
 
+	if checkConfig.PersistentMemory {
+		volName := sanitizeVolumeName(checkName)
+		if err := e.ensureVolume(ctx, volName); err != nil {
+			e.reportResult(checkName, "error", startTime, err)
+			logger.Error("Check %s: Failed to prepare persistent volume: %v", checkName, err)
+			return err
+		}
+		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:/run/foghorn/memory", volName))
+	}
+
 	resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
 		e.reportResult(checkName, "error", startTime, err)
@@ -229,6 +240,10 @@ func (e *DockerExecutor) buildEnvVars(check *config.CheckConfig) ([]string, stri
 		fmt.Sprintf("FOGHORN_CHECK_NAME=%s", check.Name),
 	}
 	secretsToRedact := make([]string, 0)
+
+	if check.PersistentMemory {
+		env = append(env, "FOGHORN_PERSISTENT_DIR=/run/foghorn/memory")
+	}
 
 	if check.Metadata != nil {
 		configJSON, err := json.Marshal(check.Metadata)
@@ -456,6 +471,14 @@ func (e *DockerExecutor) SetDebugOutput(mode string, maxChars int) {
 
 var nonFileSafeChars = regexp.MustCompile(`[^A-Za-z0-9._-]`)
 
+func sanitizeVolumeName(checkName string) string {
+	lowered := strings.ToLower(checkName)
+	sanitized := nonAlphaNum.ReplaceAllString(lowered, "-")
+	return "foghorn-memory-" + sanitized
+}
+
+var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]`)
+
 func sanitizeSecretFilename(input string) string {
 	sanitized := nonFileSafeChars.ReplaceAllString(input, "_")
 	if sanitized == "" {
@@ -545,6 +568,24 @@ func cleanupOldSecretDirs(baseDir string) error {
 		}
 	}
 
+	return nil
+}
+
+func (e *DockerExecutor) ensureVolume(ctx context.Context, volumeName string) error {
+	_, err := e.cli.VolumeInspect(ctx, volumeName)
+	if err == nil {
+		return nil
+	}
+	if !client.IsErrNotFound(err) {
+		return fmt.Errorf("failed to inspect volume %s: %w", volumeName, err)
+	}
+	_, err = e.cli.VolumeCreate(ctx, volume.CreateOptions{
+		Name: volumeName,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create volume %s: %w", volumeName, err)
+	}
+	logger.Debug("Created persistent memory volume: %s", volumeName)
 	return nil
 }
 

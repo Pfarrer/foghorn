@@ -416,6 +416,28 @@ func TestCheckResultValidation(t *testing.T) {
 	}
 }
 
+func TestSanitizeVolumeName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "disk-usage", want: "foghorn-memory-disk-usage"},
+		{input: "SSL_Check (prod)", want: "foghorn-memory-ssl-check--prod-"},
+		{input: "simple", want: "foghorn-memory-simple"},
+		{input: "UPPERCASE", want: "foghorn-memory-uppercase"},
+		{input: "check_with_underscores", want: "foghorn-memory-check-with-underscores"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := sanitizeVolumeName(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeVolumeName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTruncateLogOutput(t *testing.T) {
 	tests := []struct {
 		name     string

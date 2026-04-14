@@ -25,6 +25,7 @@ type CheckConfig struct {
 	Timeout                   string                 `yaml:"timeout,omitempty"`
 	CheckContainerDebugOutput string                 `yaml:"check_container_debug_output,omitempty"`
 	Metadata                  map[string]interface{} `yaml:"metadata,omitempty"`
+	PersistentMemory          bool                   `yaml:"persistent_memory,omitempty"`
 }
 
 type Config struct {

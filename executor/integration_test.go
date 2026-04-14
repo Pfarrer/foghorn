@@ -141,6 +141,60 @@ func TestBuildEnvVarsDoesNotExposeSecretsInEnv(t *testing.T) {
 	}
 }
 
+func TestBuildEnvVarsWithPersistentMemory(t *testing.T) {
+	exec := &DockerExecutor{}
+
+	checkConfig := &config.CheckConfig{
+		Name:             "persistent-check",
+		Image:            "test-image",
+		Enabled:          true,
+		PersistentMemory: true,
+		Timeout:          "30s",
+	}
+
+	env, secretDir, _, err := exec.buildEnvVars(checkConfig)
+	if err != nil {
+		t.Fatalf("buildEnvVars failed: %v", err)
+	}
+	if secretDir != "" {
+		t.Fatalf("did not expect secret directory, got %s", secretDir)
+	}
+
+	envMap := make(map[string]string)
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["FOGHORN_PERSISTENT_DIR"] != "/run/foghorn/memory" {
+		t.Errorf("expected FOGHORN_PERSISTENT_DIR=/run/foghorn/memory, got %q", envMap["FOGHORN_PERSISTENT_DIR"])
+	}
+}
+
+func TestBuildEnvVarsWithoutPersistentMemory(t *testing.T) {
+	exec := &DockerExecutor{}
+
+	checkConfig := &config.CheckConfig{
+		Name:    "normal-check",
+		Image:   "test-image",
+		Enabled: true,
+		Timeout: "30s",
+	}
+
+	env, _, _, err := exec.buildEnvVars(checkConfig)
+	if err != nil {
+		t.Fatalf("buildEnvVars failed: %v", err)
+	}
+
+	for _, e := range env {
+		if strings.HasPrefix(e, "FOGHORN_PERSISTENT_DIR=") {
+			t.Errorf("FOGHORN_PERSISTENT_DIR should not be set when persistent_memory is false: %s", e)
+		}
+	}
+}
+
 func TestEnvVarsSafeForProcessList(t *testing.T) {
 	exec := &DockerExecutor{
 		secretResolver: &testSecretResolver{

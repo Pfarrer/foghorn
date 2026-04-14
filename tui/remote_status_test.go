@@ -41,7 +41,7 @@ func TestRemoteStatusReaderRefresh(t *testing.T) {
 		t.Fatalf("Refresh() error = %v", err)
 	}
 
-	total, _, _, pass, _, _ := reader.GetCounts()
+	total, _, _, pass, _, _, _ := reader.GetCounts()
 	if total != 1 || pass != 1 {
 		t.Fatalf("counts = total:%d pass:%d, want total:1 pass:1", total, pass)
 	}

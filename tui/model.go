@@ -26,7 +26,7 @@ type model struct {
 
 type statusReader interface {
 	GetStartTime() time.Time
-	GetCounts() (total, running, queued, pass, fail, warn int)
+	GetCounts() (total, running, queued, pass, fail, warn, errCount int)
 	GetAllChecks() map[string]*scheduler.ScheduledCheck
 }
 
@@ -143,7 +143,7 @@ func (m model) renderHeader(styles styles) string {
 }
 
 func (m model) renderSummaryBar(styles styles) string {
-	total, running, queued, pass, fail, warn := m.status.GetCounts()
+	total, running, queued, pass, fail, warn, errCount := m.status.GetCounts()
 
 	totalStr := styles.summaryText.Render(fmt.Sprintf("Total: %d", total))
 	runningStr := styles.summaryText.Render(fmt.Sprintf("Running: %d", running))
@@ -151,9 +151,10 @@ func (m model) renderSummaryBar(styles styles) string {
 	passStr := styles.summaryText.Render(fmt.Sprintf("Pass: %d", pass))
 	failStr := styles.summaryText.Render(fmt.Sprintf("Fail: %d", fail))
 	warnStr := styles.summaryText.Render(fmt.Sprintf("Warn: %d", warn))
+	errorStr := styles.summaryText.Render(fmt.Sprintf("Error: %d", errCount))
 
 	separator := styles.summaryText.Render(" | ")
-	content := lipgloss.JoinHorizontal(lipgloss.Top, totalStr, separator, runningStr, separator, queuedStr, separator, passStr, separator, failStr, separator, warnStr)
+	content := lipgloss.JoinHorizontal(lipgloss.Top, totalStr, separator, runningStr, separator, queuedStr, separator, passStr, separator, failStr, separator, warnStr, separator, errorStr)
 
 	return styles.summaryBar.Render(content)
 }
@@ -316,7 +317,7 @@ func statusSymbol(status string, styles styles) string {
 	case "warn":
 		return styles.colorWarn.Render("⚠")
 	case "error":
-		return styles.colorFail.Render("✗")
+		return styles.colorError.Render("!")
 	default:
 		return styles.colorUnknown.Render("?")
 	}

@@ -386,7 +386,7 @@ func (s *Scheduler) GetStartTime() time.Time {
 	return s.startTime
 }
 
-func (s *Scheduler) GetCounts() (total, running, queued, pass, fail, warn int) {
+func (s *Scheduler) GetCounts() (total, running, queued, pass, fail, warn, errCount int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	total = len(s.checks)
@@ -401,6 +401,8 @@ func (s *Scheduler) GetCounts() (total, running, queued, pass, fail, warn int) {
 			fail++
 		case "warn":
 			warn++
+		case "error":
+			errCount++
 		}
 	}
 

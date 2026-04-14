@@ -68,10 +68,10 @@ func (r *remoteStatusReader) GetStartTime() time.Time {
 	return r.started
 }
 
-func (r *remoteStatusReader) GetCounts() (total, running, queued, pass, fail, warn int) {
+func (r *remoteStatusReader) GetCounts() (total, running, queued, pass, fail, warn, errCount int) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.counts.Total, r.counts.Running, r.counts.Queued, r.counts.Pass, r.counts.Fail, r.counts.Warn
+	return r.counts.Total, r.counts.Running, r.counts.Queued, r.counts.Pass, r.counts.Fail, r.counts.Warn, r.counts.Error
 }
 
 func (r *remoteStatusReader) GetAllChecks() map[string]*scheduler.ScheduledCheck {

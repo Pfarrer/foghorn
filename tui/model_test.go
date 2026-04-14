@@ -58,3 +58,26 @@ func TestHistorySymbolsRender(t *testing.T) {
 		t.Fatalf("history should include since timestamp, got %q", history)
 	}
 }
+
+func TestStatusSymbolError(t *testing.T) {
+	styles := newStyles(120)
+	result := statusSymbol("error", styles)
+	if !strings.Contains(result, "!") {
+		t.Fatalf("error status should render '!', got %q", result)
+	}
+}
+
+func TestHistorySymbolsErrorStatus(t *testing.T) {
+	styles := newStyles(120)
+	entries := []scheduler.CheckHistoryEntry{
+		{Status: "error", CompletedAt: time.Now().Add(-1 * time.Minute)},
+	}
+
+	history := formatHistorySymbols(entries, 10, styles)
+	if !strings.Contains(history, "!") {
+		t.Fatalf("history should render error symbol '!', got %q", history)
+	}
+	if !strings.Contains(history, "since") {
+		t.Fatalf("history should include since timestamp, got %q", history)
+	}
+}

@@ -386,6 +386,11 @@ func TestRunOneShot_ExitCode1WhenAnyFailOrUnknown(t *testing.T) {
 			wantCode:  1,
 		},
 		{
+			name:      "error status",
+			statusMap: map[string]string{"check-a": "error"},
+			wantCode:  1,
+		},
+		{
 			name:      "mixed pass and fail",
 			statusMap: map[string]string{"pass-check": "pass", "fail-check": "fail"},
 			wantCode:  1,
@@ -393,6 +398,11 @@ func TestRunOneShot_ExitCode1WhenAnyFailOrUnknown(t *testing.T) {
 		{
 			name:      "mixed pass and unknown",
 			statusMap: map[string]string{"pass-check": "pass", "unknown-check": "unknown"},
+			wantCode:  1,
+		},
+		{
+			name:      "mixed pass and error",
+			statusMap: map[string]string{"pass-check": "pass", "error-check": "error"},
 			wantCode:  1,
 		},
 	}

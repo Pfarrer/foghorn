@@ -52,3 +52,38 @@ func TestSnapshotIncludesCountsAndChecks(t *testing.T) {
 		t.Fatalf("History len = %d, want 2", len(checkSnap.History))
 	}
 }
+
+func TestSnapshotErrorCount(t *testing.T) {
+	executor := &MockExecutor{}
+	s := NewScheduler(executor, time.UTC, 0)
+
+	errCheck := &MockCheckConfig{
+		name:     "err-check",
+		schedule: "*/5 * * * *",
+		enabled:  true,
+	}
+	passCheck := &MockCheckConfig{
+		name:     "pass-check",
+		schedule: "*/5 * * * *",
+		enabled:  true,
+	}
+	s.AddCheck(errCheck)
+	s.AddCheck(passCheck)
+
+	lastRun := time.Now().Add(-time.Minute).UTC()
+	s.ApplyState(map[string]CheckState{
+		"err-check":  {LastStatus: "error", LastRun: lastRun},
+		"pass-check": {LastStatus: "pass", LastRun: lastRun},
+	})
+
+	snap := s.Snapshot()
+	if snap.Counts.Error != 1 {
+		t.Fatalf("Counts.Error = %d, want 1", snap.Counts.Error)
+	}
+	if snap.Counts.Pass != 1 {
+		t.Fatalf("Counts.Pass = %d, want 1", snap.Counts.Pass)
+	}
+	if snap.Checks["err-check"].LastStatus != "error" {
+		t.Fatalf("err-check LastStatus = %q, want error", snap.Checks["err-check"].LastStatus)
+	}
+}

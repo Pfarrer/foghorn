@@ -16,6 +16,7 @@ type SnapshotCounts struct {
 	Pass    int `json:"pass"`
 	Fail    int `json:"fail"`
 	Warn    int `json:"warn"`
+	Error   int `json:"error"`
 }
 
 type CheckStatus struct {
@@ -66,6 +67,8 @@ func (s *Scheduler) Snapshot() Snapshot {
 			snapshot.Counts.Fail++
 		case "warn":
 			snapshot.Counts.Warn++
+		case "error":
+			snapshot.Counts.Error++
 		}
 	}
 

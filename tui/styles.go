@@ -22,6 +22,7 @@ type styles struct {
 	colorPass    lipgloss.Style
 	colorFail    lipgloss.Style
 	colorWarn    lipgloss.Style
+	colorError   lipgloss.Style
 	colorUnknown lipgloss.Style
 	colorRunning lipgloss.Style
 	colorQueued  lipgloss.Style
@@ -104,6 +105,9 @@ func newStyles(width int) styles {
 
 		colorWarn: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#E5C07B")),
+
+		colorError: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#D19A66")),
 
 		colorUnknown: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),

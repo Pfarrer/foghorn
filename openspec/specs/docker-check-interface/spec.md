@@ -12,7 +12,9 @@ The executor SHALL inject the following environment variables into every check c
 - **THEN** `FOGHORN_ENDPOINT` and `FOGHORN_CHECK_CONFIG` are not injected
 
 ### Requirement: JSON output format
-Check containers SHALL output JSON to stdout with the following fields: `status` (string: "pass", "fail", "warn", or "unknown"), `message` (string: human-readable description), `data` (optional object: structured metrics), `timestamp` (ISO 8601 timestamp), `duration_ms` (integer: execution duration).
+Check containers SHALL output JSON to stdout with the following fields: `status` (string: "pass", "fail", "warn", "error", or "unknown"), `message` (string: human-readable description), `data` (optional object: structured metrics), `timestamp` (ISO 8601 timestamp), `duration_ms` (integer: execution duration).
+
+The `error` status indicates the check could not finish due to a technical error in the check container (e.g., network failure, browser crash, missing dependency). It SHALL NOT be used to indicate a problem with the checked property — that is the purpose of `fail`.
 
 #### Scenario: Valid JSON output parsed
 - **WHEN** a container outputs valid JSON with all required fields
@@ -25,6 +27,10 @@ Check containers SHALL output JSON to stdout with the following fields: `status`
 #### Scenario: Missing JSON fields handled
 - **WHEN** a container outputs JSON missing the `status` field
 - **THEN** the executor records an error for that check
+
+#### Scenario: Error status recorded
+- **WHEN** a container outputs `{"status": "error", "message": "DNS resolution failed"}`
+- **THEN** the executor records the result with status `error` and preserves the message
 
 ### Requirement: Exit code semantics
 Non-zero exit codes SHALL be treated as check failures. Zero exit code indicates success. The JSON `status` field takes precedence when present and exit code is zero.

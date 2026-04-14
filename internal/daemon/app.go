@@ -342,7 +342,7 @@ func runOneShot(sched *scheduler.Scheduler, exec scheduler.CheckExecutor, maxCon
 
 	wg.Wait()
 
-	passCount, warnCount, failCount, unknownCount := 0, 0, 0, 0
+	passCount, warnCount, failCount, errorCount, unknownCount := 0, 0, 0, 0, 0
 	for _, name := range enabledChecks {
 		if check, ok := allChecks[name]; ok {
 			switch check.LastStatus {
@@ -352,16 +352,18 @@ func runOneShot(sched *scheduler.Scheduler, exec scheduler.CheckExecutor, maxCon
 				warnCount++
 			case "fail":
 				failCount++
+			case "error":
+				errorCount++
 			default:
 				unknownCount++
 			}
 		}
 	}
 
-	logger.Info("One-shot complete: %d pass, %d warn, %d fail, %d unknown",
-		passCount, warnCount, failCount, unknownCount)
+	logger.Info("One-shot complete: %d pass, %d warn, %d fail, %d error, %d unknown",
+		passCount, warnCount, failCount, errorCount, unknownCount)
 
-	if failCount > 0 || unknownCount > 0 {
+	if failCount > 0 || errorCount > 0 || unknownCount > 0 {
 		return 1
 	}
 	return 0
